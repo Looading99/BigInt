@@ -187,7 +187,7 @@ public:
     // 忽略符号。
     auto operator^=(const BigInt& b) -> BigInt&;
 
-    // 忽略符号。就地转换。将自身长度视为传入值，不传入或传入 0 使用自身长度。
+    // 忽略符号，就地转换，将自身长度视为传入值，不传入或传入 0 使用自身长度。
     auto bitwise_not(size_type len = 0) -> BigInt&;
 
     // 当且仅当自身为 0 时为 false。
@@ -275,8 +275,8 @@ public:
     // 忽略符号。
     friend auto operator^(BigInt a, const BigInt& b) -> BigInt { return a ^= b; }
 
-    // 返回商和余数。可以通过传入 mode
-    // 控制商的舍入方向。不传入或传入枚举范围之外的值视为截断。默认进行结果检查。
+    // 返回商和余数。可以通过传入 mode 控制商的舍入方向。
+    // 不传入或传入枚举范围之外的值视为截断。默认进行结果检查。
     [[nodiscard]] auto divmod(const BigInt& b, RoundMode mode = RoundMode::Truncate,
         bool check = true) const -> std::pair<BigInt, BigInt>;
 
@@ -451,6 +451,14 @@ public:
             return 0;
         } else {
             return ntt_mul(a, b);
+        }
+    }
+
+    static auto mul(const BigFloat& a, const BigFloat& b, size_type precision) -> BigFloat {
+        if (a.is_zero() || b.is_zero()) {
+            return 0;
+        } else {
+            return ntt_mul(a, b, precision);
         }
     }
 
