@@ -1,0 +1,25 @@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/bigintTargets.cmake")
+
+# 单配置构建只导出一个配置变体（如 RELWITHDEBINFO）。
+# 用 MAP_IMPORTED_CONFIG_<CONFIG> 将消费方任意构建类型（含空构建类型，
+# 即 MAP_IMPORTED_CONFIG_ 空后缀）映射到该变体，否则 CMake 解析不到
+# IMPORTED_LOCATION，会在链接时静默跳过该库。
+get_target_property(_bigint_configs bigint::bigint IMPORTED_CONFIGURATIONS)
+if(_bigint_configs)
+    list(GET _bigint_configs 0 _bigint_first_cfg)
+    string(TOUPPER "${_bigint_first_cfg}" _bigint_cfg)
+    set_target_properties(bigint::bigint PROPERTIES
+        MAP_IMPORTED_CONFIG_DEBUG          "${_bigint_cfg}"
+        MAP_IMPORTED_CONFIG_RELEASE        "${_bigint_cfg}"
+        MAP_IMPORTED_CONFIG_RELWITHDEBINFO "${_bigint_cfg}"
+        MAP_IMPORTED_CONFIG_MINSIZEREL     "${_bigint_cfg}"
+        MAP_IMPORTED_CONFIG_               "${_bigint_cfg}"
+    )
+    unset(_bigint_configs)
+    unset(_bigint_first_cfg)
+    unset(_bigint_cfg)
+endif()
+
+check_required_components(bigint)

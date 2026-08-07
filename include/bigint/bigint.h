@@ -1,0 +1,503 @@
+#pragma once
+
+#include <cassert>
+#include <compare>
+#include <concepts>
+#include <cstdint>
+#include <stdexcept>
+#include <string>
+#include <utility>
+
+
+#include "bigint/bigint_base.h"
+
+namespace bigint {
+
+class BigInt;
+class BigFloat;
+
+enum class RoundMode : uint8_t {
+    Truncate,            // 截断（向零取整）
+    Floor,               // 向下取整
+    Ceil,                // 向上取整
+    RoundHalfUp,         // 四舍五入
+    Round = RoundHalfUp  // RoundHalfUp 的别名
+};
+
+enum class RoundRelativeTo : uint8_t {
+    Significant,  // 相对于最高位，保留指定位数
+    Point         // 相对于小数点，保留高位
+};
+
+
+// 指定工作线程数。
+// 默认值为 std::thread::hardware_concurrency()；传入 0 或 1 以禁用多线程，
+// 重复调用无效。此函数是线程安全的，但存在竞争时不保证设置生效。
+void init_thread_pool(uint32_t n);
+
+
+/**
+ * @brief 高精度整数。
+ *
+ * 可以从整型、字符串（std::string）和 BigFloat 构造。
+ * 不支持 -0。
+ * 支持与小于等于 64 位的整型直接进行运算。
+ * 支持位运算，忽略自身的符号。
+ */
+class BigInt {
+public:
+    constexpr BigInt(std::unsigned_integral auto x)
+        : BigInt(x, false) {}
+
+    constexpr BigInt(std::signed_integral auto x)
+        : BigInt(to_unsigned_abs(x), x < 0) {}
+
+    BigInt(const std::string& s);
+
+    BigInt(const BigFloat& x, RoundMode mode = RoundMode::Truncate);
+
+    BigInt(BigFloat&& x, RoundMode mode = RoundMode::Truncate);
+
+    [[nodiscard]] constexpr auto len() const noexcept -> size_type { return data_.size(); }
+
+    [[nodiscard]] constexpr auto get_data() const noexcept -> const Digits& { return data_; }
+
+    [[nodiscard]] constexpr auto is_zero() const noexcept -> bool {
+        if (data_.size() == 0 || (data_.size() > 1 && data_.back() == 0)) {
+            unreachable();
+        }
+        return data_.size() == 1 && data_[0] == 0;
+    }
+
+    [[nodiscard]] constexpr auto sign() const noexcept -> int {
+        return is_zero() ? 0 : (is_neg_ ? -1 : 1);
+    }
+
+    [[nodiscard]] auto to_string() const -> std::string;
+
+    [[nodiscard]] auto to_string_brute() const -> std::string;
+
+    // 传入 len 可在位数不足时补前导 0。
+    void print(std::ostream& output, size_type len = 0) const;
+    // print 内部转向 to_string_brute() 的临界值
+    static size_type           STRING_BRUTE_THRESHOLD;
+    static constexpr size_type STRING_BRUTE_THRESHOLD_DEFAULT = 1000;
+
+    constexpr void reset() {
+        data_.resize(1);
+        data_[0] = 0;
+        is_neg_  = false;
+    }
+
+    constexpr void flip_sign() noexcept {
+        if (!is_zero())
+            is_neg_ = !is_neg_;
+    }
+
+    constexpr void remove_sign() noexcept { is_neg_ = false; }
+
+    static auto compare_abs(const BigInt& a, const BigInt& b) noexcept -> std::strong_ordering;
+
+    auto unsigned_inplace_divmod(uint64_t b) -> uint64_t;
+
+    constexpr auto operator+() const -> BigInt { return *this; }
+
+    constexpr auto operator-() const -> BigInt {
+        BigInt res = *this;
+        res.flip_sign();
+        return res;
+    }
+
+    auto operator++() -> BigInt&;
+    // 会拷贝自身并返回，考虑使用前缀自增。
+    auto operator++(int) -> BigInt;
+
+    auto operator--() -> BigInt&;
+    // 会拷贝自身并返回，考虑使用前缀自减。
+    auto operator--(int) -> BigInt;
+
+    auto operator+=(const BigInt& b) -> BigInt& {
+        inplace_add_or_sub(b, false);
+        return *this;
+    }
+
+    auto operator+=(Integer64 auto b) -> BigInt& {
+        inplace_add_or_sub(to_unsigned_abs(b), b < 0);
+        return *this;
+    }
+
+    auto operator-=(const BigInt& b) -> BigInt& {
+        inplace_add_or_sub(b, true);
+        return *this;
+    }
+
+    auto operator-=(Integer64 auto b) -> BigInt& {
+        inplace_add_or_sub(to_unsigned_abs(b), b > 0);
+        return *this;
+    }
+
+    auto operator*=(BigInt& b) -> BigInt& { return *this = *this * b; }
+
+    auto operator*=(Integer64 auto b) -> BigInt& {
+        unsigned_inplace_mul(to_unsigned_abs(b));
+        if (b < 0)
+            flip_sign();
+        return *this;
+    }
+
+    auto operator/=(Integer64 auto b) -> BigInt& {
+        if (b == 0) {
+            throw std::domain_error("division by zero");
+        }
+        if (is_zero()) {
+            return *this;
+        }
+        unsigned_inplace_divmod(to_unsigned_abs(b));
+        if (b < 0)
+            flip_sign();
+        return *this;
+    }
+
+    // 低位自动补0。传入负数时调用右移。
+    auto operator<<=(Integer64 auto b) -> BigInt& {
+        if (b > 0)
+            shift_left(data_, b);
+        else if (b < 0)
+            shift_right(data_, to_unsigned_abs(b));
+        remove_leading_zero();
+        return *this;
+    }
+
+    // 移出边界的数会被丢弃。传入负数时调用左移。
+    auto operator>>=(Integer64 auto b) -> BigInt& {
+        if (b > 0)
+            shift_right(data_, b);
+        else if (b < 0)
+            shift_left(data_, to_unsigned_abs(b));
+        remove_leading_zero();
+        return *this;
+    }
+
+    // 忽略符号。
+    auto operator&=(const BigInt& b) -> BigInt&;
+
+    // 忽略符号。
+    auto operator|=(const BigInt& b) -> BigInt&;
+
+    // 忽略符号。
+    auto operator^=(const BigInt& b) -> BigInt&;
+
+    // 忽略符号。就地转换。将自身长度视为传入值，不传入或传入 0 使用自身长度。
+    auto bitwise_not(size_type len = 0) -> BigInt&;
+
+    // 当且仅当自身为 0 时为 false。
+    explicit constexpr operator bool() const noexcept { return !is_zero(); }
+
+    // 针对编译期 0 的快速比较。
+    friend auto operator<=>(const BigInt& a, Literal_zero) noexcept -> std::strong_ordering {
+        return a.sign() <=> 0;
+    }
+
+    // 针对编译期 0 的快速比较。
+    friend auto operator<=>(Literal_zero, const BigInt& b) noexcept -> std::strong_ordering {
+        return 0 <=> b.sign();
+    }
+
+    // 针对编译期 0 的快速比较。
+    friend auto operator==(const BigInt& a, Literal_zero) noexcept -> bool { return a.is_zero(); }
+    // 针对编译期 0 的快速比较。
+    friend auto operator==(Literal_zero, const BigInt& b) noexcept -> bool { return b.is_zero(); }
+
+    friend auto operator<=>(const BigInt& a, const BigInt& b) noexcept -> std::strong_ordering {
+        auto sign_a = a.sign(), sign_b = b.sign();
+        if (auto cmp = sign_a <=> sign_b; cmp != 0) {
+            return cmp;
+        }
+        if (sign_a == 0) {
+            return std::strong_ordering::equal;
+        }
+        auto cmp_abs = compare_abs(a, b);
+        return sign_a < 0 ? 0 <=> cmp_abs : cmp_abs;
+    }
+
+    friend auto operator==(const BigInt& a, const BigInt& b) noexcept -> bool {
+        return a.sign() == b.sign() && compare_abs(a, b) == 0;
+    }
+
+    // 将自身转换成字符串并输出到流。
+    friend auto operator<<(std::ostream& output, const BigInt& a) -> std::ostream& {
+        a.print(output);
+        return output;
+    }
+
+    // 从流输入字符串并构造。
+    friend auto operator>>(std::istream& input, BigInt& a) -> std::istream& {
+        std::string s;
+        input >> s;
+        a = BigInt(s);
+        return input;
+    }
+
+    friend auto operator+(BigInt a, const BigInt& b) -> BigInt { return a += b; }
+    friend auto operator+(BigInt a, Integer64 auto b) -> BigInt { return a += b; }
+    friend auto operator+(Integer64 auto a, BigInt b) -> BigInt { return b += a; }
+
+    friend auto operator-(BigInt a, const BigInt& b) -> BigInt { return a -= b; }
+    friend auto operator-(BigInt a, Integer64 auto b) -> BigInt { return a -= b; }
+    friend auto operator-(Integer64 auto a, BigInt b) -> BigInt {
+        b -= a;
+        b.flip_sign();
+        return b;
+    }
+
+    friend auto operator*(const BigInt& a, const BigInt& b) -> BigInt {
+        constexpr size_type BRUTE_LIMIT = 1;
+        if (a.is_zero() || b.is_zero()) {
+            return 0;
+        } else if (a.data_.size() + b.data_.size() <= BRUTE_LIMIT) {
+            return brute_mul(a, b);
+        } else {
+            return ntt_mul(a, b);
+        }
+    }
+    friend auto operator*(BigInt a, Integer64 auto b) -> BigInt { return a *= b; }
+    friend auto operator*(Integer64 auto a, BigInt b) -> BigInt { return b *= a; }
+
+    friend auto operator/(BigInt a, Integer64 auto b) -> BigInt { return a /= b; }
+
+    friend auto operator<<(BigInt a, Integer64 auto b) -> BigInt { return a <<= b; }
+    friend auto operator>>(BigInt a, Integer64 auto b) -> BigInt { return a >>= b; }
+
+    // 忽略符号。
+    friend auto operator&(BigInt a, const BigInt& b) -> BigInt { return a &= b; }
+    // 忽略符号。
+    friend auto operator|(BigInt a, const BigInt& b) -> BigInt { return a |= b; }
+    // 忽略符号。
+    friend auto operator^(BigInt a, const BigInt& b) -> BigInt { return a ^= b; }
+
+    // 返回商和余数。可以通过传入 mode
+    // 控制商的舍入方向。不传入或传入枚举范围之外的值视为截断。默认进行结果检查。
+    [[nodiscard]] auto divmod(const BigInt& b, RoundMode mode = RoundMode::Truncate,
+        bool check = true) const -> std::pair<BigInt, BigInt>;
+
+    static auto get_pow_of_ten(uint32_t exponent) -> BigInt;
+
+    friend class BigFloat;
+
+private:
+    Digits data_;
+
+    bool is_neg_;
+
+    static constexpr int32_t TEN = 10;
+
+    explicit constexpr BigInt()
+        : is_neg_(false) {}
+
+    explicit constexpr BigInt(std::unsigned_integral auto value, bool is_neg)
+        : is_neg_(is_neg) {
+        if (value == 0) {
+            data_.push_back(0);
+        } else {
+            while (value) {
+                data_.push_back(static_cast<uint32_t>(value) & DIGIT_MASK);
+                value >>= DIGIT_BITS;
+            }
+        }
+    }
+
+    auto remove_leading_zero() -> size_type;
+
+    void unsigned_self_inc_or_dec(bool is_dec);
+
+    auto trim_all(bool is_borrow) -> uint32_t;
+
+    void inplace_add_or_sub(const BigInt& b, bool is_sub);
+
+    void inplace_add_or_sub(uint64_t b, bool is_sub);
+
+    void unsigned_inplace_mul(uint64_t b);
+
+    template<typename C, typename T> void unsigned_inplace_mul(T b);
+
+    static auto brute_mul(const BigInt& a, const BigInt& b) -> BigInt;
+
+    static auto ntt_mul(const BigInt& a, const BigInt& b) -> BigInt;
+
+    static void shift_left(Digits& v, uint64_t offset);
+
+    static void shift_right(Digits& v, uint64_t offset);
+
+    static auto convert_from_BigFloat(RoundMode mode, Digits data, bool is_neg, int64_t point_pos)
+        -> BigInt;
+};
+
+/**
+ * @brief 高精度小数。
+ *
+ * 可以从整型、double 和 BigInt 构造。
+ * 可以转换成 double 。
+ * 不支持 -0.0 。
+ * 不支持比较，考虑作差并判断符号。
+ * 支持与 64 位整数进行乘法和移位。
+ * 可以按照给定精度舍入，@see round 。
+ */
+class BigFloat {
+public:
+    BigFloat(const BigInt& x, int64_t offset = 0)
+        : data_(x.data_)
+        , point_pos_(0)
+        , is_neg_(x.is_neg_) {
+        *this <<= offset;
+        remove_tail_zero();
+    }
+
+    BigFloat(BigInt&& x, int64_t offset = 0)
+        : data_(std::move(x.data_))
+        , point_pos_(0)
+        , is_neg_(std::move(x).is_neg_) {
+        *this <<= offset;
+        remove_tail_zero();
+    }
+
+    BigFloat(std::integral auto value, int64_t offset = 0)
+        : BigFloat(BigInt(value), offset) {}
+
+    BigFloat(double value);
+
+    [[nodiscard]] constexpr auto len() const noexcept -> size_type { return data_.size(); }
+
+    [[nodiscard]] constexpr auto get_point_pos() const noexcept -> int64_t { return point_pos_; }
+
+    [[nodiscard]] constexpr auto get_data() const noexcept -> const Digits& { return data_; }
+
+    [[nodiscard]] constexpr auto is_zero() const noexcept -> bool {
+        if (data_.size() == 0 || (data_.size() > 1 && data_.back() == 0)) {
+            unreachable();
+        }
+        return data_.size() == 1 && data_[0] == 0;
+    }
+
+    [[nodiscard]] constexpr auto sign() const noexcept -> int {
+        return is_zero() ? 0 : (is_neg_ ? -1 : 1);
+    }
+
+    [[nodiscard]] auto to_double() const -> double;
+
+    constexpr void reset() {
+        data_.resize(1);
+        data_[0]   = 0;
+        point_pos_ = 0;
+        is_neg_    = false;
+    }
+
+    constexpr void flip_sign() noexcept {
+        if (!is_zero())
+            is_neg_ = !is_neg_;
+    }
+
+    constexpr void remove_sign() noexcept { is_neg_ = false; }
+
+    // 求倒数，precision 为 0 时使用输入精度
+    [[nodiscard]] auto reciprocal(size_type precision = 0) const -> BigFloat;
+
+    [[nodiscard]] constexpr auto operator+() const -> BigFloat { return *this; }
+
+    [[nodiscard]] constexpr auto operator-() const -> BigFloat {
+        BigFloat res = *this;
+        res.flip_sign();
+        return res;
+    }
+
+    /**
+     * @brief 将自身舍入到给定精度
+     * @param mode 舍入模式，@see RoundMode 。超出枚举范围的值相当于 Truncate 。
+     * @param precision 舍入精度。
+     * @param relative 设置舍入精度相对于最高位还是小数点，@see RoundRelativeTo 。
+     *                 超出枚举范围的值相当于 Significant 。
+     */
+    void round(RoundMode mode, int64_t precision, RoundRelativeTo relative);
+
+    auto operator<<=(int64_t offset) -> BigFloat& {
+        shift(offset);
+        return *this;
+    }
+
+    auto operator>>=(int64_t offset) -> BigFloat& {
+        shift(-offset);
+        return *this;
+    }
+
+    auto operator*=(Integer64 auto b) -> BigFloat& {
+        unsigned_inplace_mul(to_unsigned_abs(b));
+        if (b < 0)
+            flip_sign();
+        return *this;
+    };
+
+    friend auto operator<<(BigFloat x, int64_t offset) -> BigFloat { return x <<= offset; }
+    friend auto operator>>(BigFloat x, int64_t offset) -> BigFloat { return x >>= offset; }
+
+    friend auto operator+(const BigFloat& a, const BigFloat& b) -> BigFloat {
+        return add_or_sub(a, b, false);
+    }
+
+    friend auto operator-(const BigFloat& a, const BigFloat& b) -> BigFloat {
+        return add_or_sub(a, b, true);
+    }
+
+    friend auto operator*(const BigFloat& a, const BigFloat& b) -> BigFloat {
+        if (a.is_zero() || b.is_zero()) {
+            return 0;
+        } else {
+            return ntt_mul(a, b);
+        }
+    }
+
+    friend class BigInt;
+
+private:
+    Digits  data_;
+    int64_t point_pos_;
+    bool    is_neg_;
+
+    static constexpr int32_t DOUBLE_MANTISSA_LEN  = 52;
+    static constexpr int32_t DOUBLE_EXPONENT_LEN  = 11;
+    static constexpr int32_t DOUBLE_EXPONENT_BIAS = 1023;
+
+    explicit constexpr BigFloat()
+        : point_pos_(0)
+        , is_neg_(false) {}
+
+    void shift(int64_t offset);
+
+    static void shift_right(Digits& v, uint32_t offset);
+
+    static void shift_left(Digits& v, uint32_t offset);
+
+    auto remove_leading_zero() -> size_type;
+
+    auto remove_tail_zero() -> size_type;
+
+    static auto add_or_sub(const BigFloat& a, const BigFloat& b, bool is_sub) -> BigFloat;
+
+    static auto ntt_mul(const BigFloat& a, const BigFloat& b, size_type output_precision = 0)
+        -> BigFloat;
+
+    void unsigned_inplace_mul(uint64_t b);
+
+    template<typename C, typename T> void unsigned_inplace_mul(T b);
+};
+
+template<class T>
+concept can_remove_sign = requires(T X) {
+    { X.remove_sign() };
+};
+
+template<can_remove_sign T> auto abs(const T& X) -> T {
+    auto res = X;
+    res.remove_sign();
+    return res;
+}
+
+}  // namespace bigint
