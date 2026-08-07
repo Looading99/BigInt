@@ -30,9 +30,9 @@ enum class RoundRelativeTo : uint8_t {
 };
 
 
-// 指定工作线程数。
-// 默认值为 std::thread::hardware_concurrency()；传入 0 或 1 以禁用多线程，
-// 重复调用无效。此函数是线程安全的，但存在竞争时不保证设置生效。
+// 指定工作线程数 (不调用时使用 std::thread::hardware_concurrency())，
+// 传入 0 或 1 以禁用多线程，重复调用无效。
+// 此函数是线程安全的，但存在竞争时不保证设置生效。
 void init_thread_pool(uint32_t n);
 
 
