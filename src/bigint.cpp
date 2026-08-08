@@ -1,12 +1,11 @@
 #include <algorithm>
 #include <array>
 #include <bit>
-#include <cctype>
 #include <cmath>
 #include <cstdint>
+#include <iomanip>
 #include <iostream>
 #include <mutex>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -18,54 +17,110 @@
 
 namespace bigint {
 
-BigInt::BigInt(const std::string& s)
+std::array<size_type, 2> BigInt::DEC_STRING_BRUTE_THRESHOLDS = DEC_STRING_BRUTE_THRESHOLDS_DEFAULT;
+
+BigInt::BigInt(const std::string& s, bool hex)
     : BigInt() {
 
-    data_.push_back(0);
-
-    bool     match_digits = false, is_neg = false;
-    uint64_t base = 1, cur_num = 0;
-
-    for (const auto c : s) {
-        if (isspace(c))
-            continue;
-        if (!match_digits) {
-            if (c == '-') {
-                is_neg       = true;
-                match_digits = true;
-            } else if (c == '+') {
-                match_digits = true;
-            } else if (isdigit(c)) {
-                match_digits = true;
-                cur_num      = c - '0';
-                base         = TEN;
-            } else {
-                break;
+    if (hex) {
+        constexpr uint8_t HEX_BITS = 4;
+        constexpr uint8_t HEX_MAX  = (1 << HEX_BITS) - 1;
+        constexpr auto    hex_map  = [HEX_MAX] {
+            std::array<uint8_t, UINT8_MAX + 1> arr{};
+            arr.fill(HEX_MAX + 1);
+            for (uint8_t i = 0; i < TEN; ++i) {
+                arr['0' + i] = i;
             }
-        } else {
-            if (!isdigit(c))
+            for (uint8_t i = TEN; i <= HEX_MAX; ++i) {
+                arr['a' + i - TEN] = arr['A' + i - TEN] = i;
+            }
+            return arr;
+        }();
+        size_type rend = 0, n = s.size();
+        for (; rend < n; ++rend) {
+            unsigned char c = s[rend];
+            if (c == '-') {
+                is_neg_ = true;
+            } else if (hex_map[c] <= HEX_MAX) {
                 break;
-            base *= TEN;
-            cur_num = cur_num * TEN + c - '0';
-            if (base > UINT64_MAX / TEN) {
-                unsigned_inplace_mul(base);
-                inplace_add_or_sub(cur_num, false);
-                base    = 1;
-                cur_num = 0;
             }
         }
+        uint32_t  digit = 0, offset = 0;
+        size_type i = n;
+        while (i > rend) {
+            --i;
+            uint32_t num = hex_map[static_cast<unsigned char>(s[i])];
+            if (num > HEX_MAX) {
+                continue;
+            }
+            digit |= num << offset;
+            offset += HEX_BITS;
+            if (offset == DIGIT_BITS) {
+                offset = 0;
+                data_.push_back(digit);
+                digit = 0;
+            }
+        }
+        if (digit) {
+            data_.push_back(digit);
+        }
+    } else {  // dec
+        size_type i = 0, n = s.size();
+        for (; i < n; ++i) {
+            unsigned char c = s[i];
+            if (std::isdigit(c)) {
+                break;
+            } else if (c == '-') {
+                is_neg_ = true;
+            }
+        }
+        auto res = convert_from_dec_string(s, i, n);
+        data_    = std::move(res.first.data_);
     }
 
-    if (base > 1) {
-        unsigned_inplace_mul(base);
-        inplace_add_or_sub(cur_num, false);
+    if (data_.size() == 0) {
+        data_.push_back(0);
+        is_neg_ = false;
+    } else {
+        remove_leading_zero();
     }
-
-    if (!is_zero())
-        is_neg_ = is_neg;
 }
 
-auto BigInt::to_string_brute() const -> std::string {
+auto BigInt::convert_from_dec_string(const std::string& s, size_type start, size_type end)
+    -> std::pair<BigInt, size_type> {
+    if (end - start < DEC_STRING_BRUTE_THRESHOLDS[0]) {
+        BigInt    res(0);
+        size_type len = 0;
+        uint64_t  cur = 0, base = 1;
+        for (size_type i = start; i < end; ++i) {
+            unsigned char c = s[i];
+            if (!std::isdigit(c)) {
+                continue;
+            }
+            ++len;
+            base *= TEN;
+            cur = cur * TEN + c - '0';
+            if (base > UINT64_MAX / TEN) {
+                res *= base;
+                res += cur;
+                base = 1;
+                cur  = 0;
+            }
+        }
+        if (base > 1) {
+            res *= base;
+            res += cur;
+        }
+        return {res, len};
+    } else {
+        auto half = (start + end) / 2;
+        auto hi   = convert_from_dec_string(s, start, half);
+        auto lo   = convert_from_dec_string(s, half, end);
+        return {hi.first * get_pow_of_ten(lo.second) + lo.first, hi.second + lo.second};
+    }
+}
+
+auto BigInt::to_dec_string_brute() const -> std::string {
     if (is_zero())
         return "0";
 
@@ -114,22 +169,31 @@ auto BigInt::get_pow_of_ten(uint32_t exponent) -> BigInt {
     return res;
 }
 
-size_type BigInt::STRING_BRUTE_THRESHOLD = STRING_BRUTE_THRESHOLD_DEFAULT;
-
-auto BigInt::to_string() const -> std::string {
-    std::ostringstream res;
-    print(res);
-    return res.str();
+void BigInt::print(std::ostream& output, bool hex, bool direct) const {
+    if (direct) {
+        if (hex)
+            print_hex(output);
+        else
+            print_dec(output);
+    } else {
+        std::ostringstream tmp;
+        if (hex)
+            print_hex(tmp);
+        else
+            print_dec(tmp);
+        output << tmp.str();
+    }
 }
 
-void BigInt::print(std::ostream& output, size_type len) const {
+
+void BigInt::print_dec(std::ostream& output) const {
     const size_type n = data_.size();
     if (n == 0) {
         unreachable();
     }
 
     auto brute = [&](const BigInt& _num, size_type _len) {
-        auto res     = _num.to_string_brute();
+        auto res     = _num.to_dec_string_brute();
         auto it      = res.begin();
         auto res_len = res.size();
         if (_num.is_neg_) {
@@ -147,8 +211,8 @@ void BigInt::print(std::ostream& output, size_type len) const {
         }
     };
 
-    if (n == 1 || n < STRING_BRUTE_THRESHOLD) {
-        brute(*this, len);
+    if (n == 1 || n < DEC_STRING_BRUTE_THRESHOLDS[1]) {
+        brute(*this, 0);
         return;
     }
 
@@ -167,7 +231,7 @@ void BigInt::print(std::ostream& output, size_type len) const {
         stk.emplace_back(std::move(Q), _len > k ? _len - k : 0);
     };
 
-    divide_push(*this, len);
+    divide_push(*this, 0);
 
     while (!stk.empty()) {
         auto [cur_num, cur_len] = std::move(stk.back());
@@ -176,12 +240,30 @@ void BigInt::print(std::ostream& output, size_type len) const {
         if (cn == 0) {
             unreachable();
         }
-        if (cn == 1 || cn < STRING_BRUTE_THRESHOLD) {
+        if (cn == 1 || cn < DEC_STRING_BRUTE_THRESHOLDS[1]) {
             brute(cur_num, cur_len);
         } else {
             divide_push(cur_num, cur_len);
         }
     }
+}
+
+void BigInt::print_hex(std::ostream& output) const {
+    if (is_zero()) {
+        output.put('0');
+        return;
+    }
+    if (is_neg_) {
+        output.put('-');
+    };
+    size_type n = data_.size();
+    output << std::hex << data_.back() << std::setfill('0');
+    size_type i = n - 1;
+    while (i) {
+        --i;
+        output << std::setw(DIGIT_BITS / 4) << data_[i];
+    }
+    output << std::dec << std::setfill(' ');
 }
 
 auto BigInt::remove_leading_zero() -> size_type {

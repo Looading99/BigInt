@@ -20,7 +20,8 @@ namespace bigint {
 // 内部容器
 using Digits = std::vector<uint32_t>;
 
-// 基数位宽，必须保证基数小于所有模数
+// 基数位宽，必须保证基数小于所有模数；
+// print_hex 依赖此数是 4 的倍数
 constexpr uint32_t DIGIT_BITS = 28;
 constexpr uint32_t DIGIT_MASK = (1u << DIGIT_BITS) - 1u;
 

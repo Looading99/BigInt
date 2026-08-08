@@ -110,8 +110,9 @@ int main() {
     if (sum > c) { /* ... */ }
 
     // 转十进制字符串 / 输出到流
-    std::cout << c << "\n";
-    std::string s = c.to_string();
+    std::string s = c.to_string();            // 需要字符串时使用
+    c.print(std::cout, false, true); std::cout << '\n';  // 直接输出到流，避免临时字符串复制（推荐）
+    // std::cout << c << '\n';                // 或用 operator<<（内部经临时流）
 
     // 高精度小数
     BigFloat x(3.141592653589793);
@@ -124,15 +125,17 @@ int main() {
 }
 ```
 
+> 💡 **性能提示**：`to_string()` 与 `operator<<` 内部都会构造临时字符串/临时流再拷贝。如果只是把大数输出到流（`std::cout`、文件等），建议直接调用 `print(output, hex, direct)` 一次性写入目标流，避免额外的内存分配与复制。`direct` 参数：`true` 直接写入目标流（要求流格式标志干净）；`false`（默认）先写入临时流再输出，以隔离调用方流的格式标志。
+
 ## API 概览
 
 ### `bigint::BigInt` — 高精度整数
 
 | 类别 | API |
 | --- | --- |
-| 构造 | 无/有符号整型（模板）、`std::string`、`BigFloat`（移动/拷贝；可指定舍入模式） |
+| 构造 | 无/有符号整型（模板）、`std::string`（`hex=false` 十进制 / `true` 十六进制）、`BigFloat`（移动/拷贝；可指定舍入模式） |
 | 查询 | `len()`、`get_data()`、`is_zero()`、`sign()` |
-| 转换 | `to_string()`、`to_string_brute()`、`print(ostream)` |
+| 转换 | `to_string(hex=false)`、`print(ostream, hex=false, direct=false)` |
 | 算数运算 | `+ - * /`、`+= -= *= /=`、`++ --`、一元 `+ -`、`unsigned_inplace_divmod(uint64_t b)`就地除法 |
 | 位运算\* |  `& \| ^ << >>` 及对应 `=` 版本、`bitwise_not(len)`原地按位取反 |
 | 比较 |`compare_abs(a, b)`无符号比较、`<=>`、`==`（含与编译期常量 `0` 的快速比较） |

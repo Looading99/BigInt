@@ -7,6 +7,7 @@
 #include "bigint/bigint_base.h"
 #include "bigint/ntt.h"
 
+
 namespace bigint {
 
 namespace ntt_multithread {

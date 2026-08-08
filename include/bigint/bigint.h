@@ -1,15 +1,16 @@
 #pragma once
 
-#include <cassert>
 #include <compare>
 #include <concepts>
 #include <cstdint>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
 
 
 #include "bigint/bigint_base.h"
+
 
 namespace bigint {
 
@@ -46,13 +47,39 @@ void init_thread_pool(uint32_t n);
  */
 class BigInt {
 public:
+    // 从十进制字符串转换和转换到十进制字符串的分治阈值
+    static std::array<size_type, 2>           DEC_STRING_BRUTE_THRESHOLDS;
+    static constexpr std::array<size_type, 2> DEC_STRING_BRUTE_THRESHOLDS_DEFAULT = {5000, 2000};
+
     constexpr BigInt(std::unsigned_integral auto x)
         : BigInt(x, false) {}
 
     constexpr BigInt(std::signed_integral auto x)
         : BigInt(to_unsigned_abs(x), x < 0) {}
 
-    BigInt(const std::string& s);
+    // 拷贝
+    BigInt(const BigInt&)                    = default;
+    auto operator=(const BigInt&) -> BigInt& = default;
+    ~BigInt()                                = default;
+
+    // 移动：移动后源对象被重置为 0，保持 "data_ 非空" 的不变量，
+    // 因此移动后对源对象调用任何公开 API 都安全（而非未指定状态）。
+    constexpr BigInt(BigInt&& other) noexcept
+        : data_(std::move(other.data_))
+        , is_neg_(other.is_neg_) {
+        other.reset();
+    }
+    constexpr auto operator=(BigInt&& other) noexcept -> BigInt& {
+        if (this != &other) {
+            data_   = std::move(other.data_);
+            is_neg_ = other.is_neg_;
+            other.reset();
+        }
+        return *this;
+    }
+
+    // 忽略一切非法字符，字符串开头到第一个合法字符之间有 '-' 则结果为负
+    BigInt(const std::string& s, bool hex = false);
 
     BigInt(const BigFloat& x, RoundMode mode = RoundMode::Truncate);
 
@@ -73,17 +100,19 @@ public:
         return is_zero() ? 0 : (is_neg_ ? -1 : 1);
     }
 
-    [[nodiscard]] auto to_string() const -> std::string;
+    [[nodiscard]] auto to_string(bool hex = false) const -> std::string {
+        std::ostringstream res;
+        print(res, hex, true);
+        return res.str();
+    };
 
-    [[nodiscard]] auto to_string_brute() const -> std::string;
+    // hex 模式下不会输出前缀 "0x" ，会输出负号。
+    // direct：控制直接输出到流或创建临时 ostringstream 再一次性输出到流中；
+    // 开启 direct 时请确保没有可能影响分段输出的流格式标志。
+    void print(std::ostream& output, bool hex = false, bool direct = false) const;
 
-    // 传入 len 可在位数不足时补前导 0。
-    void print(std::ostream& output, size_type len = 0) const;
-    // print 内部转向 to_string_brute() 的临界值
-    static size_type           STRING_BRUTE_THRESHOLD;
-    static constexpr size_type STRING_BRUTE_THRESHOLD_DEFAULT = 1000;
-
-    constexpr void reset() {
+    // 仅可能因内存分配抛 bad_alloc；noexcept 下内存耗尽将 terminate（视为不可恢复）。
+    constexpr void reset() noexcept {
         data_.resize(1);
         data_[0] = 0;
         is_neg_  = false;
@@ -306,6 +335,14 @@ private:
         }
     }
 
+    static auto convert_from_dec_string(const std::string& s, size_type start, size_type end)
+        -> std::pair<BigInt, size_type>;
+
+    [[nodiscard]] auto to_dec_string_brute() const -> std::string;
+    // 假定给定的流没有任何标志
+    void print_dec(std::ostream& output) const;
+    void print_hex(std::ostream& output) const;
+
     auto remove_leading_zero() -> size_type;
 
     void unsigned_self_inc_or_dec(bool is_dec);
@@ -365,6 +402,29 @@ public:
 
     BigFloat(double value);
 
+    // 拷贝
+    BigFloat(const BigFloat&)                    = default;
+    auto operator=(const BigFloat&) -> BigFloat& = default;
+    ~BigFloat()                                  = default;
+
+    // 移动：移动后源对象被重置为 0，保持 "data_ 非空" 的不变量，
+    // 因此移动后对源对象调用任何公开 API 都安全（而非未指定状态）。
+    constexpr BigFloat(BigFloat&& other) noexcept
+        : data_(std::move(other.data_))
+        , point_pos_(other.point_pos_)
+        , is_neg_(other.is_neg_) {
+        other.reset();
+    }
+    constexpr auto operator=(BigFloat&& other) noexcept -> BigFloat& {
+        if (this != &other) {
+            data_      = std::move(other.data_);
+            point_pos_ = other.point_pos_;
+            is_neg_    = other.is_neg_;
+            other.reset();
+        }
+        return *this;
+    }
+
     [[nodiscard]] constexpr auto len() const noexcept -> size_type { return data_.size(); }
 
     [[nodiscard]] constexpr auto get_point_pos() const noexcept -> int64_t { return point_pos_; }
@@ -384,7 +444,8 @@ public:
 
     [[nodiscard]] auto to_double() const -> double;
 
-    constexpr void reset() {
+    // 仅可能因内存分配抛 bad_alloc；noexcept 下内存耗尽将 terminate（视为不可恢复）。
+    constexpr void reset() noexcept {
         data_.resize(1);
         data_[0]   = 0;
         point_pos_ = 0;
