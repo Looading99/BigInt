@@ -5,7 +5,7 @@
 ## 特性
 
 - **高精度整数 `BigInt`**：支持任意位长的整数四则运算、位运算、比较、字符串互转、快速幂、`get_pow_of_ten`、`divmod` 及多种舍入模式。
-- **高精度小数 `BigFloat`**：支持从 `BigInt` / 整型构造、与 `double` 互转、按精度舍入、求倒数（`reciprocal`）。
+- **高精度小数 `BigFloat`**：支持从 `BigInt` / 整型 / 字符串（不支持解析字符串中的小数点）构造、与 `double` 互转、按精度舍入、求倒数（`reciprocal`）。
 - **NTT 快速乘法**：三模数 NTT + Montgomery 模乘 + AVX2 SIMD 向量化。
 - **多线程**：`init_thread_pool` 可指定工作线程数，大数乘法自动并行；本库线程安全，可被多个线程并发使用。
 - **易于集成**：CMake 静态库目标 `bigint::bigint`，支持 `find_package` 安装导出。
@@ -145,7 +145,7 @@ int main() {
 
 ### `bigint::BigFloat` — 高精度小数
 
-- 构造：`BigInt`（移动/拷贝）、整型（可带 `offset`）、`double`
+- 构造：`BigInt`（移动/拷贝）、整型、字符串（可带 `offset`）、`double`
 - 方法：`sign()`、`to_double()`、`reciprocal(precision)`、`round(mode, precision, relative)`、`get_data()`、`get_point_pos()`等
 - 运算：`+ -`、乘法`*`和`mul(a, b, precision)`（`*`无精度限制，`mul`需传入目标精度）、`<<= >>=`（二进制移位）、一元 `+ -`
 - 舍入模式 `RoundMode`：`Truncate` / `Floor` / `Ceil` / `RoundHalfUp`（别名 `Round`）

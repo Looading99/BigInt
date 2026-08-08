@@ -188,21 +188,22 @@ public:
     }
 
     // 低位自动补0。传入负数时调用右移。
-    auto operator<<=(Integer64 auto b) -> BigInt& {
-        if (b > 0)
-            shift_left(data_, b);
-        else if (b < 0)
-            shift_right(data_, to_unsigned_abs(b));
+    auto operator<<=(Integer64 auto offset) -> BigInt& {
+        if (offset > 0)
+            shift_left(data_, offset);
+        else if (offset < 0)
+            shift_right(data_, to_unsigned_abs(offset));
         remove_leading_zero();
         return *this;
     }
 
-    // 移出边界的数会被丢弃。传入负数时调用左移。
-    auto operator>>=(Integer64 auto b) -> BigInt& {
-        if (b > 0)
-            shift_right(data_, b);
-        else if (b < 0)
-            shift_left(data_, to_unsigned_abs(b));
+    // 移出最低位的数会被丢弃。传入负数时调用左移。
+    // 想保留移出最低位的数可使用 BigFloat 的构造函数。
+    auto operator>>=(Integer64 auto offset) -> BigInt& {
+        if (offset > 0)
+            shift_right(data_, offset);
+        else if (offset < 0)
+            shift_left(data_, to_unsigned_abs(offset));
         remove_leading_zero();
         return *this;
     }
@@ -294,8 +295,8 @@ public:
 
     friend auto operator/(BigInt a, Integer64 auto b) -> BigInt { return a /= b; }
 
-    friend auto operator<<(BigInt a, Integer64 auto b) -> BigInt { return a <<= b; }
-    friend auto operator>>(BigInt a, Integer64 auto b) -> BigInt { return a >>= b; }
+    friend auto operator<<(BigInt a, Integer64 auto offset) -> BigInt { return a <<= offset; }
+    friend auto operator>>(BigInt a, Integer64 auto offset) -> BigInt { return a >>= offset; }
 
     // 忽略符号。
     friend auto operator&(BigInt a, const BigInt& b) -> BigInt { return a &= b; }
@@ -372,7 +373,7 @@ private:
 /**
  * @brief 高精度小数。
  *
- * 可以从整型、double 和 BigInt 构造。
+ * 可以从整型、字符串、double 和 BigInt 构造。
  * 可以转换成 double 。
  * 不支持 -0.0 。
  * 不支持比较，考虑作差并判断符号。
@@ -398,8 +399,13 @@ public:
         remove_tail_zero();
     }
 
+    // 委托给 BigInt 构造
     BigFloat(std::integral auto value, int64_t offset = 0)
         : BigFloat(BigInt(value), offset) {}
+
+    // 委托给 BigInt 构造，不支持处理字符串中的小数点！
+    BigFloat(const std::string& s, bool hex = false, int64_t offset = 0)
+        : BigFloat(BigInt(s, hex), offset) {}
 
     BigFloat(double value);
 
