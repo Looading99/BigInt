@@ -1126,6 +1126,7 @@ BigInt::BigInt(BigFloat&& x, RoundMode mode)
                  ? 0u
                  : convert_from_BigFloat(
                        mode, std::move(x.data_), x.is_neg_, std::move(x).point_pos_)) {
+    x.reset();
 }
 
 auto BigInt::convert_from_BigFloat(RoundMode mode, Digits data, bool is_neg, int64_t point_pos)

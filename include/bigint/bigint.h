@@ -393,6 +393,7 @@ public:
         : data_(std::move(x.data_))
         , point_pos_(0)
         , is_neg_(std::move(x).is_neg_) {
+        x.reset();
         *this <<= offset;
         remove_tail_zero();
     }
