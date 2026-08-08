@@ -6,6 +6,7 @@
 #include <iomanip>
 #include <iostream>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -171,21 +172,16 @@ auto BigInt::get_pow_of_ten(uint32_t exponent) -> BigInt {
 }
 
 void BigInt::print(std::ostream& output, bool hex, bool direct) const {
-    if (direct) {
-        if (hex)
-            print_hex(output);
-        else
-            print_dec(output);
-    } else {
-        std::ostringstream tmp;
-        if (hex)
-            print_hex(tmp);
-        else
-            print_dec(tmp);
-        output << tmp.str();
+    std::optional<std::ostringstream> buffer;
+    std::ostream&                     out = direct ? output : buffer.emplace();
+    if (hex)
+        print_hex(out);
+    else
+        print_dec(out);
+    if (!direct) {
+        output << buffer->rdbuf();
     }
 }
-
 
 void BigInt::print_dec(std::ostream& output) const {
     const size_type n = data_.size();
