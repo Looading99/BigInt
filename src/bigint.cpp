@@ -15,6 +15,7 @@
 #include "bigint/bigint.h"
 #include "bigint/ntt_multithread.h"
 
+
 namespace bigint {
 
 std::array<size_type, 2> BigInt::DEC_STRING_BRUTE_THRESHOLDS = DEC_STRING_BRUTE_THRESHOLDS_DEFAULT;

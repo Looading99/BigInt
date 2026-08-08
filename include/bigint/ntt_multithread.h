@@ -28,7 +28,6 @@ void crt_merge(Digits& v);
 
 }  // namespace ntt_multithread
 
-
 namespace ntt {
 
 // 必须保证输入数组非全0。output_precision 不为 0 时将结果截断。
@@ -37,6 +36,5 @@ auto ntt_mul(const Digits& a, const Digits& b, size_type output_precision = 0,
 
 
 }  // namespace ntt
-
 
 }  // namespace bigint

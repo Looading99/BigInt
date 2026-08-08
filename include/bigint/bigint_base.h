@@ -116,5 +116,4 @@ constexpr auto modinv(int64_t a, int64_t m) -> int64_t {
     return ((exgcd(a, m)[1] % m) + m) % m;
 }
 
-
 }  // namespace bigint

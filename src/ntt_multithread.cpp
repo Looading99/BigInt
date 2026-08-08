@@ -406,11 +406,9 @@ void crt_merge(Digits& v) {
 
 }  // namespace ntt_multithread
 
-
 void init_thread_pool(uint32_t n) {
     ntt_multithread::get_pool(n == 0 ? 1 : n);
 }
-
 
 namespace ntt {
 
@@ -518,6 +516,5 @@ auto ntt_mul(const Digits& a, const Digits& b, size_type output_precision,
 
 
 }  // namespace ntt
-
 
 }  // namespace bigint
