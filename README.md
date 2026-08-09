@@ -105,7 +105,7 @@ int main() {
 
     // 大整数快速幂
     BigInt c = bigint::fast_pow(b, 1919810);
-    std::cout << "114514^1919810 has " << c.len() * bigint::DIGIT_BIS << " bits\n";
+    std::cout << "114514^1919810 len=" << c.len() << "\n";
 
     // 四则运算、比较（C++20 三路比较）
     BigInt sum = a + c * 3 - b;
