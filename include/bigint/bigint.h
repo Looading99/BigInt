@@ -165,7 +165,7 @@ public:
         return *this;
     }
 
-    auto operator*=(BigInt& b) -> BigInt& { return *this = *this * b; }
+    auto operator*=(const BigInt& b) -> BigInt& { return *this = *this * b; }
 
     auto operator*=(Integer64 auto b) -> BigInt& {
         unsigned_inplace_mul(to_unsigned_abs(b));
@@ -254,9 +254,9 @@ public:
         return a.sign() == b.sign() && compare_abs(a, b) == 0;
     }
 
-    // 将自身转换成字符串并输出到流。
+    // 将自身转换成字符串并输出到流，避免拷贝请使用 print。
     friend auto operator<<(std::ostream& output, const BigInt& a) -> std::ostream& {
-        a.print(output);
+        a.print(output, (output.flags() & std::ios_base::hex) != 0, false);
         return output;
     }
 
@@ -264,7 +264,7 @@ public:
     friend auto operator>>(std::istream& input, BigInt& a) -> std::istream& {
         std::string s;
         input >> s;
-        a = BigInt(s);
+        a = BigInt(s, (input.flags() & std::ios_base::hex) != 0);
         return input;
     }
 
@@ -319,8 +319,6 @@ private:
 
     bool is_neg_;
 
-    static constexpr int32_t TEN = 10;
-
     explicit constexpr BigInt()
         : is_neg_(false) {}
 
@@ -340,8 +338,9 @@ private:
         -> std::pair<BigInt, size_type>;
 
     [[nodiscard]] auto to_dec_string_brute() const -> std::string;
-    // 假定给定的流没有任何标志
-    void print_dec(std::ostream& output) const;
+    // 假定流标志干净，传入 len 填充前导 0
+    void print_dec(std::ostream& output, size_type len = 0) const;
+    // 假定流标志干净
     void print_hex(std::ostream& output) const;
 
     auto remove_leading_zero() -> size_type;
@@ -465,6 +464,32 @@ public:
     }
 
     constexpr void remove_sign() noexcept { is_neg_ = false; }
+
+    // 输出人类可读的十进制小数，
+    // 小数位数不传或传 0 使用二进制小数位数 * log10(2) ，想只输出整数请使用 round 。
+    // **不要**将输出的字符串直接传递给 BigFloat 的构造函数，会导致精度损失和丢失小数点信息！
+    // direct 参数同 BigInt::print 。
+    void print(std::ostream& output, size_type dec_digits = 0, bool direct = false) const;
+
+    // 使用默认位数将自身转换为字符串输出到流，避免复制请直接使用 print 。
+    friend auto operator<<(std::ostream& output, const BigFloat& a) -> std::ostream& {
+        a.print(output, 0, false);
+        return output;
+    }
+
+    // @see print
+    [[nodiscard]] auto to_string(size_type dec_digits = 0) const -> std::string {
+        std::ostringstream res;
+        print(res, dec_digits, true);
+        return res.str();
+    }
+
+    friend auto operator>>(std::istream& input, BigFloat& a) -> std::istream& {
+        std::string s;
+        input >> s;
+        a = BigFloat(s, (input.flags() & std::ios_base::hex) != 0);
+        return input;
+    }
 
     // 求倒数，precision 为 0 时使用输入精度
     [[nodiscard]] auto reciprocal(size_type precision = 0) const -> BigFloat;

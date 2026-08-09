@@ -7,6 +7,7 @@
 #include <iostream>
 #include <mutex>
 #include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -90,7 +91,7 @@ BigInt::BigInt(const std::string& s, bool hex)
 
 auto BigInt::convert_from_dec_string(const std::string& s, size_type start, size_type end)
     -> std::pair<BigInt, size_type> {
-    if (end - start < DEC_STRING_BRUTE_THRESHOLDS[0]) {
+    if (end - start < std::max(2ull, DEC_STRING_BRUTE_THRESHOLDS[0])) {
         BigInt    res(0);
         size_type len = 0;
         uint64_t  cur = 0, base = 1;
@@ -172,8 +173,8 @@ auto BigInt::get_pow_of_ten(uint32_t exponent) -> BigInt {
 }
 
 void BigInt::print(std::ostream& output, bool hex, bool direct) const {
-    std::optional<std::ostringstream> buffer;
-    std::ostream&                     out = direct ? output : buffer.emplace();
+    std::optional<std::stringstream> buffer;
+    std::ostream&                    out = direct ? output : buffer.emplace();
     if (hex)
         print_hex(out);
     else
@@ -183,7 +184,7 @@ void BigInt::print(std::ostream& output, bool hex, bool direct) const {
     }
 }
 
-void BigInt::print_dec(std::ostream& output) const {
+void BigInt::print_dec(std::ostream& output, size_type len) const {
     const size_type n = data_.size();
     if (n == 0) {
         unreachable();
@@ -209,7 +210,7 @@ void BigInt::print_dec(std::ostream& output) const {
     };
 
     if (n == 1 || n < DEC_STRING_BRUTE_THRESHOLDS[1]) {
-        brute(*this, 0);
+        brute(*this, len);
         return;
     }
 
@@ -228,7 +229,7 @@ void BigInt::print_dec(std::ostream& output) const {
         stk.emplace_back(std::move(Q), _len > k ? _len - k : 0);
     };
 
-    divide_push(*this, 0);
+    divide_push(*this, len);
 
     while (!stk.empty()) {
         auto [cur_num, cur_len] = std::move(stk.back());
@@ -1014,6 +1015,78 @@ template<typename C, typename T> void BigFloat::unsigned_inplace_mul(T b) {
         }
     } else {
         remove_leading_zero();
+    }
+}
+
+void BigFloat::print(std::ostream& output, size_type dec_digits, bool direct) const {
+    std::optional<std::stringstream> buffer;
+    std::ostream&                    out = direct ? output : buffer.emplace();
+
+    BigInt int_part, dec_part;
+    if (point_pos_ < static_cast<int64_t>(data_.size())) {
+        int_part.data_.reserve(static_cast<int64_t>(data_.size()) - point_pos_);
+        if (point_pos_ < 0) {
+            int_part.data_.assign(-point_pos_, 0);
+        }
+        int_part.data_.insert(
+            int_part.data_.end(), data_.begin() + std::max(0ll, point_pos_), data_.end());
+    }
+    if (int_part.data_.empty()) {
+        int_part.data_.push_back(0);
+    }
+
+    if (point_pos_ > 0) {
+        dec_part.data_.insert(dec_part.data_.begin(),
+            data_.begin(),
+            data_.begin() + std::min(point_pos_, static_cast<int64_t>(data_.size())));
+    }
+
+    if (dec_digits == 0) {
+        dec_digits =
+            std::floor(static_cast<double>(dec_part.data_.size() * DIGIT_BITS) * std::log10(2));
+    }
+    if (dec_digits) {
+        if (dec_part.data_.empty()) {
+            dec_part.data_.push_back(0);
+        }
+        dec_part.remove_leading_zero();
+        auto K = fast_pow(BigInt(TEN / 2), dec_digits);
+        dec_part *= K;
+        int64_t  offset = DIGIT_BITS * point_pos_ - static_cast<int64_t>(dec_digits);
+        BigFloat bf_dec_part(std::move(dec_part), -offset);
+        dec_part = BigInt(bf_dec_part, RoundMode::RoundHalfUp);
+        // 快速判断 dec_part 是否恰好等于 10^dec_digits
+        auto check = [&]() -> bool {
+            size_type tail_zero_cnt = 0;
+            for (auto num : dec_part.data_) {
+                if (num != 0) {
+                    tail_zero_cnt += std::countr_zero(num);
+                    break;
+                }
+                tail_zero_cnt += DIGIT_BITS;
+            }
+            if (tail_zero_cnt != dec_digits) {
+                return false;
+            }
+            return (dec_part >> dec_digits) == K;
+        };
+        if (check()) {
+            dec_part.reset();
+            ++int_part;
+        }
+    }
+
+    if (is_neg_) {
+        out.put('-');
+    }
+    int_part.print_dec(out);
+    out.put('.');
+    if (dec_digits) {
+        dec_part.print_dec(out, dec_digits);
+    }
+
+    if (!direct) {
+        output << buffer->rdbuf();
     }
 }
 
