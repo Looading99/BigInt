@@ -538,6 +538,12 @@ public:
         return *this;
     };
 
+    // 建议使用 mul 指定精度
+    auto operator*=(const BigFloat& b) -> BigFloat& {
+        *this = *this * b;
+        return *this;
+    }
+
     friend auto operator<<(BigFloat x, int64_t offset) -> BigFloat { return x <<= offset; }
     friend auto operator>>(BigFloat x, int64_t offset) -> BigFloat { return x >>= offset; }
 
@@ -549,6 +555,7 @@ public:
         return add_or_sub(a, b, true);
     }
 
+    // 建议使用 mul 指定精度
     friend auto operator*(const BigFloat& a, const BigFloat& b) -> BigFloat {
         if (a.is_zero() || b.is_zero()) {
             return 0;
