@@ -36,6 +36,8 @@ target_compile_options(
 if(BUILD_EXAMPLES)
     add_executable(bigint_benchmark examples/main.cpp)
     target_link_libraries(bigint_benchmark PRIVATE bigint::bigint)
+    add_executable(bst examples/binary_split.cpp)
+    target_link_libraries(bst PRIVATE bigint::bigint)
 endif()
 
 # ---- 安装与导出（find_package(bigint CONFIG) 支持） ----

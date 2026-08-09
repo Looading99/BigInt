@@ -521,6 +521,16 @@ public:
         return *this;
     }
 
+    auto operator+=(const BigFloat& b) -> BigFloat& {
+        *this = *this + b;
+        return *this;
+    }
+
+    auto operator-=(const BigFloat& b) -> BigFloat& {
+        *this = *this - b;
+        return *this;
+    }
+
     auto operator*=(Integer64 auto b) -> BigFloat& {
         unsigned_inplace_mul(to_unsigned_abs(b));
         if (b < 0)

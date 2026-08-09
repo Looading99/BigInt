@@ -23,6 +23,7 @@ src/
     ntt_multithread.cpp  # 多线程 NTT 实现
 examples/
     main.cpp             # 基准测试示例程序（目标 bigint_benchmark）
+    binary_split.cpp     # 使用二进制分裂算法计算任意位数的 e（目标 bst）
 cmake/
     bigintConfig.cmake.in  # find_package 配置模板
 ```
