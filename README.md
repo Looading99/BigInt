@@ -22,7 +22,7 @@ src/
     bigint.cpp           # BigInt / BigFloat 实现
     ntt_multithread.cpp  # 多线程 NTT 实现
 examples/
-    main.cpp             # 基准测试示例程序（目标 bigint_benchmark）
+    benchmark.cpp        # 基准测试示例程序（目标 bigint_benchmark）
     binary_split.cpp     # 二进制分裂算法模板（ main() 中为计算e的示例）（目标 bst）
     pi.cpp               # 使用二进制分裂算法计算任意位数的 pi （目标 pi）
 cmake/
@@ -48,7 +48,7 @@ cmake --build build
 构建产物：
 
 - `libbigint.a` — 静态库
-- `bigint_benchmark.exe` — 基准测试示例（`-DBUILD_EXAMPLES=OFF` 可关闭）
+- examples 中的测试示例（`-DBUILD_EXAMPLES=OFF` 可关闭）
 
 ## 安装与集成
 

@@ -34,7 +34,7 @@ target_compile_options(
 
 # ---- 示例/基准程序 ----
 if(BUILD_EXAMPLES)
-    add_executable(bigint_benchmark examples/main.cpp)
+    add_executable(bigint_benchmark examples/benchmark.cpp)
     target_link_libraries(bigint_benchmark PRIVATE bigint::bigint)
     add_executable(bst examples/binary_split.cpp)
     target_link_libraries(bst PRIVATE bigint::bigint)
