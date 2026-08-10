@@ -1121,6 +1121,9 @@ auto BigFloat::reciprocal(size_type precision) const -> BigFloat {
 
 // round_idx：舍去部分的最高位
 static void _round(RoundMode mode, Digits& v, bool is_neg, int64_t round_idx) {
+    if (round_idx < 0 || round_idx >= static_cast<int64_t>(v.size())) {
+        unreachable();
+    }
     bool increase_abs = !is_neg;
     switch (mode) {
     case RoundMode::Floor: increase_abs = is_neg; [[fallthrough]];
@@ -1204,7 +1207,11 @@ auto BigInt::convert_from_BigFloat(RoundMode mode, Digits data, bool is_neg, int
     if (point_pos < 0) {
         data.insert(data.begin(), -point_pos, 0);
     } else if (point_pos > 0) {
-        _round(mode, data, is_neg, point_pos - 1);
+        if (point_pos > static_cast<int64_t>(data.size())) {
+            return 0;
+        } else {
+            _round(mode, data, is_neg, point_pos - 1);
+        }
     }
     BigInt res;
     res.data_   = std::move(data);
