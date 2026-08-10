@@ -60,17 +60,23 @@ auto bst(size_type r) -> std::pair<BigInt, BigInt> {
             segs.emplace_back(val_P, val_Q, val_R, true);
         }
     }
-    BigInt &res_P = segs.back().val_P, &res_Q = segs.back().val_Q, &res_R = segs.back().val_R;
-    for (size_type i = segs.size() - 1; i > 0;) {
-        --i;
-        auto& seg = segs[i];
+    BigInt val_P(0), val_Q(0), val_R(0);
+    bool   moved = false;
+    for (auto& seg : segs) {
         if (seg.valid) {
-            res_P = res_P * seg.val_Q + res_R * seg.val_P;
-            res_Q = res_Q * seg.val_Q;
-            res_R = res_R * seg.val_R;
+            if (!moved) {
+                moved = true;
+                val_P = std::move(seg.val_P);
+                val_Q = std::move(seg.val_Q);
+                val_R = std::move(seg.val_R);
+            } else {
+                val_P = seg.val_P * val_Q + seg.val_R * val_P;
+                val_Q = val_Q * seg.val_Q;
+                val_R = val_R * seg.val_R;
+            }
         }
     }
-    return {std::move(res_P), std::move(res_Q)};
+    return {std::move(val_P), std::move(val_Q)};
 }
 
 auto main() -> int {
