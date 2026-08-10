@@ -985,10 +985,7 @@ void BigFloat::unsigned_inplace_mul(uint64_t b) {
     if (is_zero() || b == 1) {
         return;
     } else if (b == 0) {
-        data_.resize(1);
-        data_[0]   = 0;
-        point_pos_ = 0;
-        is_neg_    = false;
+        reset();
     } else if ((b & (b - 1)) == 0) {  // b 是 2 的幂
         *this <<= std::countr_zero(b);
     } else if (b <= UINT32_MAX) {
