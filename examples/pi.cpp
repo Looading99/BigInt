@@ -80,7 +80,7 @@ auto main() -> int {
 
     auto inner_precision = static_cast<size_type>(
         std::ceil(static_cast<double>(dec_digits + 1) / DIGIT_BITS * std::log2(10)));
-    inner_precision *= 2;
+    inner_precision = inner_precision * 3 / 2;  // 保证精度足够
 
 
     auto t1 = std::chrono::high_resolution_clock::now();

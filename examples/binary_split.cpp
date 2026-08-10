@@ -91,11 +91,11 @@ auto main() -> int {
 
     auto [res_P, res_Q] = bst(r + 1, P, Q, R);
 
-    size_type reciprocal_precision =
+    size_type inner_precision =
         std::ceil(static_cast<double>(dec_digits + 1) / DIGIT_BITS * std::log2(10));
-    reciprocal_precision *= 2;  // 多迭代一次
+    inner_precision = inner_precision * 3 / 2;  // 保证精度足够
 
-    auto e = BigFloat(1) + res_P * res_Q.reciprocal(reciprocal_precision);
+    auto e = BigFloat(1) + res_P * res_Q.reciprocal(inner_precision);
 
     auto t2 = std::chrono::high_resolution_clock::now();
     std::cout << "calucation finished in "
