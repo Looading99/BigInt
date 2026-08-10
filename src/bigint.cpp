@@ -15,7 +15,7 @@
 
 
 #include "bigint/bigint.h"
-#include "bigint/ntt_multithread.h"
+#include "bigint/ntt_mul.h"
 
 
 namespace bigint {

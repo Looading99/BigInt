@@ -8,9 +8,7 @@
 #include "bigint/ntt.h"
 
 
-namespace bigint {
-
-namespace ntt_multithread {
+namespace bigint::ntt_multithread {
 
 // Montgomery 域的交织式多模数 NTT (interleaved multi-modulus NTT)，
 // 对下标模 NUM_PRIMES 同余类分别应用模数为 P[i] 的 NTT，
@@ -26,15 +24,4 @@ void imm_mul_vec(Digits& v, const Digits& v2);
 // 调用者应当保证这样的拆分是安全的。
 void crt_merge(Digits& v);
 
-}  // namespace ntt_multithread
-
-namespace ntt {
-
-// 必须保证输入数组非全0。output_precision 不为 0 时将结果截断。
-auto ntt_mul(const Digits& a, const Digits& b, size_type output_precision = 0,
-    int64_t* p_result_point_pos = nullptr) -> Digits;
-
-
-}  // namespace ntt
-
-}  // namespace bigint
+}  // namespace bigint::ntt_multithread

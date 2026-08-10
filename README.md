@@ -18,9 +18,11 @@ include/bigint/
     bigint.h             # BigInt / BigFloat 公开 API
     ntt.h                # NTT 基础（常量定义、位逆序置换、Montgomery 算法、SIMD 实现）
     ntt_multithread.h    # 多线程 NTT 接口
+    ntt_mul.h            # NTT 乘法接口
 src/
     bigint.cpp           # BigInt / BigFloat 实现
     ntt_multithread.cpp  # 多线程 NTT 实现
+    ntt_mul.cpp          # NTT 乘法实现
 examples/
     benchmark.cpp        # 基准测试示例程序（目标 bigint_benchmark）
     binary_split.cpp     # 二进制分裂算法模板（ main() 中为计算e的示例）（目标 bst）

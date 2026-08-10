@@ -303,8 +303,4 @@ inline void copy_repeat(const Digits& v_in, size_type offset, size_type k, Digit
     }
 }
 
-constexpr auto get_mul_offset(const Digits& v, size_type output_precision) -> size_type {
-    return output_precision == 0 || v.size() <= output_precision ? 0 : v.size() - output_precision;
-}
-
 }  // namespace bigint::ntt

@@ -12,6 +12,7 @@ option(BUILD_EXAMPLES "Build the example/benchmark programs" ON)
 add_library(bigint STATIC
     src/bigint.cpp
     src/ntt_multithread.cpp
+    src/ntt_mul.cpp
 )
 add_library(bigint::bigint ALIAS bigint)
 
