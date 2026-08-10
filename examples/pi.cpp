@@ -11,8 +11,7 @@
 using namespace bigint;
 
 auto bst(size_type r) -> std::pair<BigInt, BigInt> {
-    BigInt p0("13591409");
-    BigInt q0("10939058860032000");
+    constexpr uint64_t Q0 = 10939058860032000ull;  // 640320^3 / 24
 
     struct Entry {
         BigInt val_P;
@@ -23,18 +22,22 @@ auto bst(size_type r) -> std::pair<BigInt, BigInt> {
 
     std::vector<Entry> segs;
     segs.reserve(std::bit_width(r));
+
+    uint64_t p0 = 13591409;
     for (size_type i = 1; i <= r; ++i) {
-        BigInt val_Q(q0);
+        // Q(i) = Q0 * i^3
+        BigInt val_Q(Q0);
         val_Q *= i;
         val_Q *= i;
         val_Q *= i;
 
-        BigInt val_R(2 * i - 1);
-        val_R *= 6 * i - 1;
-        val_R *= 6 * i - 5;
+        // R(i) = (2i-1)(6i-1)(6i-5)
+        auto   _r = static_cast<uint128_t>(2 * i - 1) * (6 * i - 1) * (6 * i - 5);
+        BigInt val_R(_r);
 
+        // P(i) = (-1)^i (13591409 + 545140134 i) * R(i)
         p0 += 545140134;
-        BigInt val_P(p0 * val_R);
+        BigInt val_P(BigInt(p0) * val_R);
         if (i % 2) {
             val_P.flip_sign();
         }
@@ -97,7 +100,10 @@ auto main() -> int {
         size_type      cur_prec = 52 / DIGIT_BITS;
         while (cur_prec < inner_precision) {
             cur_prec *= 2;
-            s = BigFloat::mul(s, a - ((10005 * BigFloat::mul(s, s, cur_prec)) >> 1), cur_prec);
+            auto ss = BigFloat::mul(s, s, cur_prec);
+            ss *= 10005;
+            ss >>= 1;
+            s = BigFloat::mul(s, a - ss, cur_prec);
         }
     }
     pi = BigFloat::mul(pi, s, inner_precision);

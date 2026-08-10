@@ -281,7 +281,9 @@ public:
     }
 
     friend auto operator*(const BigInt& a, const BigInt& b) -> BigInt {
-        constexpr size_type BRUTE_LIMIT = 1;
+        // digit 数之和 ≤ 此阈值时走朴素乘法（O(n²)），否则走 NTT。
+        // NTT 对小规模有固定开销，阈值过小会让小乘法白白付出建表/变换代价。
+        constexpr size_type BRUTE_LIMIT = 128;
         if (a.is_zero() || b.is_zero()) {
             return 0;
         } else if (a.data_.size() + b.data_.size() <= BRUTE_LIMIT) {
@@ -563,6 +565,11 @@ public:
             return ntt_mul(a, b);
         }
     }
+
+    // 与 64 位整型的乘法：复用 operator*= 就地计算，
+    // 避免隐式构造 BigFloat 临时再走 NTT。
+    friend auto operator*(BigFloat a, Integer64 auto b) -> BigFloat { return a *= b; }
+    friend auto operator*(Integer64 auto a, BigFloat b) -> BigFloat { return b *= a; }
 
     static auto mul(const BigFloat& a, const BigFloat& b, size_type precision) -> BigFloat {
         if (a.is_zero() || b.is_zero()) {
