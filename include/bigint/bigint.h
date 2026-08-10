@@ -81,9 +81,9 @@ public:
     // 忽略一切非法字符，字符串开头到第一个合法字符之间有 '-' 则结果为负
     BigInt(const std::string& s, bool hex = false);
 
-    BigInt(const BigFloat& x, RoundMode mode = RoundMode::Truncate);
+    explicit BigInt(const BigFloat& x, RoundMode mode = RoundMode::Truncate);
 
-    BigInt(BigFloat&& x, RoundMode mode = RoundMode::Truncate);
+    explicit BigInt(BigFloat&& x, RoundMode mode = RoundMode::Truncate);
 
     [[nodiscard]] constexpr auto len() const noexcept -> size_type { return data_.size(); }
 
@@ -254,7 +254,7 @@ public:
         return a.sign() == b.sign() && compare_abs(a, b) == 0;
     }
 
-    // 将自身转换成字符串并输出到流，避免拷贝请使用 print。
+    // 将自身转换成字符串并输出到流，会检测流的 hex 标志，避免拷贝请使用 print。
     friend auto operator<<(std::ostream& output, const BigInt& a) -> std::ostream& {
         a.print(output, (output.flags() & std::ios_base::hex) != 0, false);
         return output;
@@ -383,7 +383,7 @@ private:
  */
 class BigFloat {
 public:
-    BigFloat(const BigInt& x, int64_t offset = 0)
+    explicit BigFloat(const BigInt& x, int64_t offset = 0)
         : data_(x.data_)
         , point_pos_(0)
         , is_neg_(x.is_neg_) {
@@ -391,7 +391,7 @@ public:
         remove_tail_zero();
     }
 
-    BigFloat(BigInt&& x, int64_t offset = 0)
+    explicit BigFloat(BigInt&& x, int64_t offset = 0)
         : data_(std::move(x.data_))
         , point_pos_(0)
         , is_neg_(std::move(x).is_neg_) {
@@ -623,6 +623,41 @@ template<can_remove_sign T> auto abs(const T& X) -> T {
     auto res = X;
     res.remove_sign();
     return res;
+}
+
+struct BigIntPrintHelper {
+    const BigInt* ptr;
+    bool          hex;
+    bool          direct;
+
+    friend auto operator<<(std::ostream& output, const BigIntPrintHelper& helper) -> std::ostream& {
+        helper.ptr->print(output, helper.hex, helper.direct);
+        return output;
+    }
+};
+
+struct BigFloatPrintHelper {
+    const BigFloat* ptr;
+    size_type       dec_digits;
+    bool            direct;
+
+    friend auto operator<<(std::ostream& output, const BigFloatPrintHelper& helper)
+        -> std::ostream& {
+        helper.ptr->print(output, helper.dec_digits, helper.direct);
+        return output;
+    }
+};
+
+// 流式代理输出，参数 @see BigInt::print，与 operator<< 不同，不会检测流标志
+inline auto print(const BigInt& BigInt_to_print, bool hex = false, bool direct = false)
+    -> BigIntPrintHelper {
+    return {.ptr = &BigInt_to_print, .hex = hex, .direct = direct};
+}
+
+// 流式代理输出，参数 @see BigFloat::print
+inline auto print(const BigFloat& BigFloat_to_print, size_type dec_digits = 0, bool direct = false)
+    -> BigFloatPrintHelper {
+    return {.ptr = &BigFloat_to_print, .dec_digits = dec_digits, .direct = direct};
 }
 
 }  // namespace bigint

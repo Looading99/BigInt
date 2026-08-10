@@ -71,7 +71,7 @@ auto bst(size_type r, lambda_P P, lambda_Q Q, lambda_R R) -> std::pair<BigFloat,
             }
         }
     }
-    return {std::move(val_P), std::move(val_Q)};
+    return {BigFloat(std::move(val_P)), BigFloat(std::move(val_Q))};
 }
 
 auto main() -> int {
@@ -109,8 +109,7 @@ auto main() -> int {
               << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count() << "ms.\n";
 
     std::ofstream out("e.txt", std::ios::out);
-    e.print(out, dec_digits, true);
-    out << '\n';
+    out << print(e, dec_digits, true) << '\n';
     out.close();
     std::cout << "output has been written to e.txt.\n";
 }

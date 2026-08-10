@@ -121,8 +121,7 @@ auto main() -> int {
               << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count() << "ms.\n";
 
     std::ofstream out("pi.txt", std::ios::out);
-    pi.print(out, dec_digits, true);
-    out << '\n';
+    out << print(pi, dec_digits, true) << '\n';
     out.close();
     std::cout << "output has been written to pi.txt.\n";
 }

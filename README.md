@@ -112,9 +112,10 @@ int main() {
     if (sum > c) { /* ... */ }
 
     // 转十进制字符串 / 输出到流
-    std::string s = c.to_string();            // 需要字符串时使用
-    c.print(std::cout, false, true); std::cout << '\n';  // 直接输出到流，避免临时字符串复制（推荐）
-    // std::cout << c << '\n';                // 或用 operator<<（内部经临时流）
+    std::string s = c.to_string();  // 需要字符串时使用
+    c.print(std::cout, false, true); std::cout << '\n';     // 直接输出到流，避免临时字符串复制（推荐）
+    // std::cout << bigint::print(c, false, true) << '\n';  // 或流式输出代理，其余参数与成员函数版相同（推荐）
+    // std::cout << std::hex << c << '\n';                  // 或用 operator<< ，会自动检测流的 hex 标志，但只能构建临时流后输出
 
     // 高精度小数
     BigFloat x(3.141592653589793);
@@ -122,12 +123,16 @@ int main() {
     BigFloat inv = y.reciprocal(10);       // 求倒数，指定 10 位内部数字的精度
     y.round(bigint::RoundMode::RoundHalfUp, 50, bigint::RoundRelativeTo::Point); // 按精度舍入
     double d = y.to_double();              // 转回 double
+    std::cout << bigint::print(y, 10, true) << '\n'  // 以十进制小数格式输出 10 位小数
+    // 也可使用 y.to_string()，y.print()，std::cout << y 等
 
     return 0;
 }
 ```
 
-> 💡 **性能提示**：`to_string()` 与 `operator<<` 内部都会构造临时字符串/临时流再拷贝。如果只是把大数输出到流（`std::cout`、文件等），建议直接调用 `print(output, hex, direct)` 一次性写入目标流，避免额外的内存分配与复制。`direct` 参数：`true` 直接写入目标流（要求流格式标志干净）；`false`（默认）先写入临时流再输出，以隔离调用方流的格式标志。
+> **注意** 1.性能提示：`operator<<` 内部为隔离流的格式标志会构造临时流再拷贝，建议直接调用成员函数 `print()` 一次性写入目标流，避免额外的内存分配与复制。也可用流式代理 `std::cout << bigint::print(x)`（其余参数与成员函数版相同）。
+>
+> 2.语义差异：`BigInt` 的 `operator<<` 会检测流的 `hex` 标志（`std::cout << std::hex << x` 输出十六进制）；而 `print(x)` 默认十进制、不受流标志影响，需要十六进制时请显式 `print(x, true)`。
 
 ## API 概览
 
@@ -159,6 +164,8 @@ int main() {
 - `init_thread_pool(uint32_t n)` — 设置工作线程数（`0`/`1` 禁用多线程；不调用时默认 `hardware_concurrency()`；重复调用无效）
 - `fast_pow(T base, uint32_t exponent)` — 快速幂
 - `abs(const T&)` — 绝对值（适用于 `BigInt` / `BigFloat`）
+- `print(const BigInt&, bool hex=false, bool direct=false)` — 流式输出代理，配合 `operator<<`：`std::cout << bigint::print(x, true)` 输出十六进制
+- `print(const BigFloat&, size_type dec_digits=0, bool direct=false)` — 同理，可指定小数位数
 
 ## 实现说明
 
