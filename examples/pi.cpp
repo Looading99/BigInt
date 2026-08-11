@@ -37,7 +37,7 @@ auto bst(size_type r) -> std::pair<BigInt, BigInt> {
 
         // P(i) = (-1)^i (13591409 + 545140134 i) * R(i)
         p0 += 545140134;
-        BigInt val_P(BigInt(p0) * val_R);
+        BigInt val_P(_r * p0);
         if (i % 2) {
             val_P.flip_sign();
         }
