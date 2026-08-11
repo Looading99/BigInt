@@ -181,7 +181,7 @@ private:
     std::mutex                mtx;
     std::vector<std::jthread> threads_;
     uint32_t                  total_threads_;
-    std::atomic<uint32_t>     ready_count_, running_count_;
+    std::atomic<uint32_t>     running_count_;
     std::atomic<bool>         have_work_, all_finish_, stop_;
     bool                      is_valid_pool_;
 
@@ -212,24 +212,19 @@ public:
 
     NTTThreadPool(uint32_t n)
         : total_threads_(n)
-        , ready_count_(0)
-        , running_count_(0)
+        , running_count_(n)
         , have_work_(false)
         , all_finish_(false)
-        , stop_(false) {
+        , stop_(false)
+        , is_valid_pool_(is_valid_thread_count(n)) {
 
-        if (!is_valid_thread_count(n)) {
-            is_valid_pool_ = false;
+        if (!is_valid_pool_) {
             return;
         }
-        is_valid_pool_ = true;
 
         auto worker = [&]() {
             while (true) {
-                ready_count_.fetch_add(1, std::memory_order_release);
                 wait_with_spin_then_block(have_work_);
-
-                ready_count_.fetch_sub(1, std::memory_order_relaxed);
 
                 if (stop_.load(std::memory_order_acquire)) {
                     break;
@@ -243,6 +238,8 @@ public:
 
                 running_count_.fetch_sub(1, std::memory_order_release);
                 wait_with_spin_then_block(all_finish_);
+
+                running_count_.fetch_add(1, std::memory_order_release);
             }
         };
 
@@ -270,7 +267,6 @@ public:
         p_cur_task_ = p_task;
         std::visit([&](auto ptr_task) { ptr_task->init(total_threads_); }, p_cur_task_);
 
-        running_count_.store(total_threads_, std::memory_order_relaxed);
         cur_block_.store(0, std::memory_order_relaxed);
         have_work_.store(true, std::memory_order_release);
         have_work_.notify_all();
@@ -283,11 +279,11 @@ public:
         all_finish_.store(true, std::memory_order_release);
         all_finish_.notify_all();
 
-        while (ready_count_.load(std::memory_order_acquire) != total_threads_) {
+        while (running_count_.load(std::memory_order_acquire) != total_threads_) {
             _mm_pause();
         }
 
-        all_finish_.store(false, std::memory_order_release);
+        all_finish_.store(false, std::memory_order_relaxed);
     }
 
     [[nodiscard]] auto is_valid() const -> bool { return is_valid_pool_; }
