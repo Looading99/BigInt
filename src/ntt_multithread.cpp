@@ -1,7 +1,6 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
-#include <cassert>
 #include <chrono>
 #include <cstdint>
 #include <immintrin.h>
@@ -33,7 +32,7 @@ public:
         size_type len;
         bool      rev;
 
-        static constexpr size_type THRESHOLD           = 512;
+        static constexpr size_type THRESHOLD           = 1024;
         static constexpr size_type BLOCK_THREAD_FACTOR = 4;
 
         void init(size_type total_threads) {
@@ -84,7 +83,7 @@ public:
         Digits*                               p_v;
         std::array<uint32_t, ntt::NUM_PRIMES> nums;
 
-        static constexpr size_type THRESHOLD           = 1024;
+        static constexpr size_type THRESHOLD           = 2048;
         static constexpr size_type BLOCK_THREAD_FACTOR = 4;
 
         void init(size_type total_threads) {
@@ -115,7 +114,7 @@ public:
         Digits*       p_v;
         const Digits* p_v2;
 
-        static constexpr size_type THRESHOLD           = 1024;
+        static constexpr size_type THRESHOLD           = 2048;
         static constexpr size_type BLOCK_THREAD_FACTOR = 4;
 
         void init(size_type total_threads) {
@@ -187,17 +186,23 @@ private:
     std::atomic<bool>         have_work_, all_finish_, stop_;
     bool                      is_valid_pool_;
 
-    using clock = std::chrono::steady_clock;
-    static constexpr std::chrono::milliseconds SPIN_TIMEOUT{100};
-
     static void wait_with_spin_then_block(std::atomic<bool>& flag) {
+        using clock = std::chrono::steady_clock;
+        constexpr std::chrono::milliseconds SPIN_TIMEOUT{5};
+        constexpr size_type                 CHECK_INTERVAL = 32;
+
         const auto spin_deadline = clock::now() + SPIN_TIMEOUT;
-        while (clock::now() < spin_deadline) {
-            if (flag.load(std::memory_order_acquire)) {
-                return;
-            }
+        // NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while)
+        do {
             std::this_thread::yield();
-        }
+            for (size_type i = 0; i < CHECK_INTERVAL; ++i) {
+                if (flag.load(std::memory_order_acquire)) {
+                    return;
+                }
+                _mm_pause();
+            }
+        } while (clock::now() < spin_deadline);
+
         while (!flag.load(std::memory_order_acquire)) {
             flag.wait(false, std::memory_order_acquire);
         }
@@ -272,7 +277,7 @@ public:
         have_work_.notify_all();
 
         while (running_count_.load(std::memory_order_acquire) != 0) {
-            std::this_thread::yield();
+            _mm_pause();
         }
 
         have_work_.store(false, std::memory_order_relaxed);
@@ -280,7 +285,7 @@ public:
         all_finish_.notify_all();
 
         while (ready_count_.load(std::memory_order_acquire) != total_threads_) {
-            std::this_thread::yield();
+            _mm_pause();
         }
 
         all_finish_.store(false, std::memory_order_release);

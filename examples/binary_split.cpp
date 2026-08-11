@@ -75,6 +75,7 @@ auto bst(size_type r, lambda_P P, lambda_Q Q, lambda_R R) -> std::pair<BigFloat,
 }
 
 auto main() -> int {
+    init_thread_pool(8);
     // 示例：计算 e
     auto P = [](size_type x) { return 1; };
     auto Q = [](size_type x) { return x; };

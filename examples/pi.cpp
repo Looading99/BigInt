@@ -80,6 +80,7 @@ auto bst(size_type r) -> std::pair<BigInt, BigInt> {
 }
 
 auto main() -> int {
+    init_thread_pool(8);
     size_type dec_digits = 0;
     std::cout << "input target pi precision(decimal digits): ";
     std::cin >> dec_digits;
