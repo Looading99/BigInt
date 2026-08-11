@@ -31,19 +31,28 @@ cmake/
     bigintConfig.cmake.in  # find_package 配置模板
 ```
 
-## 环境要求
-
-- CMake ≥ 3.15
-- 支持 C++20 的编译器：**GCC ≥ 10** 或 **Clang ≥ 12**（MinGW 环境，如 msys2 ucrt64 / clang64）
-- 需要 `__uint128_t` 与 AVX2（`-mavx2`）支持
-- ⚠️ 不支持 MSVC（缺少 `__uint128_t`）
 
 ## 构建
 
-本项目使用 **MinGW Makefiles** 生成器。
+环境要求：
 
-```powershell
+- CMake ≥ 3.15
+- 支持 C++20 的编译器：GCC ≥ 10 或 Clang ≥ 12
+- 需要 `__uint128_t` 与 AVX2（`-mavx2`）支持
+- ⚠️ **不支持 MSVC**（缺少 `__uint128_t`）
+- CMake 生成器无强制要求，可按平台选用，如：
+
+```bash
+# Linux / macOS（gcc/clang，默认 Unix Makefiles）
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+
+# Windows + MinGW-w64（gcc/clang，需 mingw32-make 在 PATH 中）
 cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+
+# 各平台通用：也可使用 Ninja
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
