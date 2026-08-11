@@ -4,7 +4,6 @@
 #include <chrono>
 #include <cstdint>
 #include <immintrin.h>
-#include <memory>
 #include <mutex>
 #include <thread>
 #include <variant>
@@ -295,12 +294,8 @@ public:
 };
 
 static auto get_pool(uint32_t n = 0) -> NTTThreadPool& {
-    static std::unique_ptr<NTTThreadPool> p_pool;
-    static std::once_flag                 once;
-    std::call_once(once, [n] {
-        p_pool = std::make_unique<NTTThreadPool>(n != 0 ? n : std::thread::hardware_concurrency());
-    });
-    return *p_pool;
+    static NTTThreadPool pool(n != 0 ? n : std::thread::hardware_concurrency());
+    return pool;
 }
 
 void imm_ntt(Digits& v, bool rev) {
