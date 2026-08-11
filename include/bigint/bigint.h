@@ -138,12 +138,12 @@ public:
     }
 
     auto operator++() -> BigInt&;
-    // 会拷贝自身并返回，考虑使用前缀自增。
-    auto operator++(int) -> BigInt;
+    // 会拷贝自身并返回，如无特殊需求请使用前缀自增。
+    [[nodiscard]] auto operator++(int) -> BigInt;
 
     auto operator--() -> BigInt&;
-    // 会拷贝自身并返回，考虑使用前缀自减。
-    auto operator--(int) -> BigInt;
+    // 会拷贝自身并返回，如无特殊需求请使用前缀自减。
+    [[nodiscard]] auto operator--(int) -> BigInt;
 
     auto operator+=(const BigInt& b) -> BigInt& {
         inplace_add_or_sub(b, false);
