@@ -1,6 +1,6 @@
 # BigInt
 
-基于 **多模数NTT** 的高性能高精度整数 / 高精度小数 C++20 库，支持多线程与 AVX2 向量化加速。
+基于 **多模数NTT** 的高性能高精度整数 / 高精度小数 C++20 库，使用多线程与 AVX2 向量化加速。
 
 ## 特性
 
@@ -131,10 +131,9 @@ int main() {
     return 0;
 }
 ```
-
-> **注意** 1.性能提示：`operator<<` 内部为隔离流的格式标志会构造临时流再拷贝，建议直接调用成员函数 `print()` 一次性写入目标流，避免额外的内存分配与复制。也可用流式代理 `std::cout << bigint::print(x)`（其余参数与成员函数版相同）。
->
-> 2.语义差异：`BigInt` 的 `operator<<` 会检测流的 `hex` 标志（`std::cout << std::hex << x` 输出十六进制）；而 `print(x)` 默认十进制、不受流标志影响，需要十六进制时请显式 `print(x, true)`。
+> [!WARNING]
+> 1.性能提示：`operator<<` 内部为隔离流的格式标志会构造临时流再拷贝，建议直接调用成员函数 `print()` 一次性写入目标流，避免额外的内存分配与复制。也可用流式代理 `std::cout << bigint::print(x)`（其余参数与成员函数版相同）<br>
+> 2.语义差异：`BigInt` 的 `operator<<` 会检测流的 `hex` 标志（`std::cout << std::hex << x` 输出十六进制）；而 `print(x)` 默认十进制、不受流标志影响，需要十六进制时请显式 `print(x, true)`
 
 ## API 概览
 
@@ -142,44 +141,49 @@ int main() {
 
 | 类别 | API |
 | --- | --- |
-| 构造 | 无/有符号整型（模板）、`std::string`（`hex=false` 十进制 / `true` 十六进制）、`BigFloat`（移动/拷贝；可指定舍入模式） |
+| 构造 | 任意无/有符号整型<sup>[1]</sup>、`std::string`（`hex=false` 十进制 / `true` 十六进制）、`BigFloat`（移动/拷贝；可指定舍入模式） |
 | 查询 | `len()`、`get_data()`、`is_zero()`、`sign()` |
 | 转换 | `to_string(hex=false)`、`print(ostream, hex=false, direct=false)` |
-| 算数运算 | `+ - * /`、`+= -= *= /=`、`++ --`、一元 `+ -`、`unsigned_inplace_divmod(uint64_t b)`就地除法 |
-| 位运算\* |  `& \| ^ << >>` 及对应 `=` 版本、`bitwise_not(len)`原地按位取反 |
-| 比较 |`compare_abs(a, b)`无符号比较、`<=>`、`==`（含与编译期常量 `0` 的快速比较） |
-| 其他 | `divmod(b, mode)` 带舍入的商余、`get_pow_of_ten()`、`reset()`、`flip_sign()`、`remove_sign()`、流输入输出 `<< >>` |
+| 算数运算 | `+ - * / += -= *= /=`<sup>[2]</sup>、`++ --`<sup>[3]</sup>、一元 `+ -`、`unsigned_inplace_divmod(uint64_t)`、`divmod(BigInt, RoundMode)` |
+| 位运算<sup>[4]</sup> |  `& \| ^ << >>` 及对应复合赋值<sup>[5]</sup>、`bitwise_not(len)`原地按位取反（无 `~` ） |
+| 比较 |`compare_abs(a, b)`无符号比较、`<=>`、`==`（含与编译期常量 `0`<sup>[6]</sup> 的快速比较） |
+| 其他 | `reset()`、`flip_sign()`、`remove_sign()`、流输入输出 `<< >>`、`get_pow_of_ten()` |
 
-> \* 位运算忽略`BigInt`的符号，且自动移除前导零。
+>注：<br>
+>[1] :包括`__uint128_t`和`__int128_t` <br>
+>[2] :`+ - *` 及对应的复合赋值支持 64 位整数和`BigInt`，`/`和`/=`仅支持64位整数（与`BigInt`间求商余请使用`divmod`，支持四种商的舍入模式）；另外，`+= -=`是原地的， `*= /=` 与 64 位整型之间是原地的，可优先考虑使用它们 <br>
+>[3] :包括前置和后置，后置会返回值改变前的副本，如无特殊需求请使用前置 <br>
+>[4] :位运算忽略`BigInt`的符号，且运算后移除前导零 <br>
+>[5] :复合赋值是原地的；移位可传入负数，相当于反向移位 <br>
+>[6] :隐式转换为 `nullptr` 
 
 ### `bigint::BigFloat` — 高精度小数
 
 - 构造：`BigInt`（移动/拷贝）、整型、字符串（可带 `offset`）、`double`
 - 方法：`sign()`、`to_double()`、`to_string(dec_digits)`、`print(ostream, dec_digits, direct)`、`reciprocal(precision)`、`round(mode, precision, relative)`、`get_data()`、`get_point_pos()`等
-- 运算：`+ -`、乘法`*`和`mul(a, b, precision)`（`*`无精度限制，`mul`需传入目标精度）、`<<= >>=`（二进制移位）、一元 `+ -`
+- 运算：`+ -`、乘法`*`和`mul(a, b, precision)`（`*`无精度限制，`mul`需传入目标精度）、`<< >> <<= >>=`（二进制移位，等价于乘/除以 2 的幂，可传入负数）、一元 `+ -`
 - 舍入模式 `RoundMode`：`Truncate` / `Floor` / `Ceil` / `RoundHalfUp`（别名 `Round`）
-- 精度参照 `RoundRelativeTo`：`Significant`（相对最高位）/ `Point`（相对小数点）
+- 精度参照 `RoundRelativeTo`：`Significant`（相对最高位，可理解为: `114.514, 4 -> 114.5`）/ `Point`（相对小数点，可理解为：`114.514, 1 -> 110`/`114.514, -1 -> 114.5`）
 - 说明：不支持比较，建议作差后判断符号；不支持 `-0.0`
 
 ### 顶层函数
 
 - `init_thread_pool(uint32_t n)` — 设置工作线程数（`0`/`1` 禁用多线程；不调用时默认 `hardware_concurrency()`；重复调用无效）
-- `fast_pow(T base, uint32_t exponent)` — 快速幂
+- `fast_pow(T base, uint32_t exponent)` — 快速幂模板
 - `abs(const T&)` — 绝对值（适用于 `BigInt` / `BigFloat`）
 - `print(const BigInt&, bool hex=false, bool direct=false)` — 流式输出代理，配合 `operator<<`：`std::cout << bigint::print(x, true)` 输出十六进制
 - `print(const BigFloat&, size_type dec_digits=0, bool direct=false)` — 同理，可指定小数位数
 
 ## 实现说明
 
-- **表示方式**：以 `2^28` 为基数、小端序 `uint32_t` 数组存储（`DIGIT_BITS = 28`），无前导零。
+- **表示方式**：以 `2^28` 为基数（`DIGIT_BITS = 28`）、小端序 `uint32_t` 数组存储，无前导零。
 - **乘法**：使用三模数 NTT，结合 Montgomery 模乘、AVX2 向量化，多线程下分块并行。
 - **理论最大值**：受 NTT 最大变换长度限制，可表示整数的理论最大值约为 2^(28·2^26)（每个数 `DIGIT_BITS = 28` 二进制位 × 最大变换长度 2^26，后者由三个 NTT 素数中 2 的幂因子最小值决定）。
-- **线程池**：有超时忙等（默认5ms）+ 动态块分配的任务模型，8 线程时 NTT 乘法相对单线程约 3.6~4.3× 加速。
+- **线程池**：有超时忙等（默认`5ms`）+ 动态块大小 + 工作窃取 的任务模型，8 线程时 NTT 乘法相对单线程约 3.6~4.3× 加速。
 
 ## 已知限制
 
-- 线程池的线程数达到 CPU物理并行数 - LPE核心数 时性能下降严重，建议手动指定线程数。
+- 线程池的线程数超过 CPU 并行数（排除 LPE 核心）时性能下降严重，建议根据具体 CPU 情况手动指定线程数。
 - 不支持 MSVC 编译。
-- `BigInt` 的 `operator/` 仅支持除以 64 位整型；`BigInt` 之间求商余可使用 `divmod`（可指定舍入模式）。
 - `BigFloat` 不支持比较运算，建议作差后判断符号。
 - 部分功能依赖 AVX2，需在支持的 CPU 上编译运行。
