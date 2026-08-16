@@ -967,7 +967,7 @@ auto BigFloat::add_or_sub(const BigFloat& a, const BigFloat& b, bool is_sub) -> 
         else
             res.remove_leading_zero();
     }
-
+    res.remove_tail_zero();
     return res;
 }
 
@@ -978,6 +978,7 @@ auto BigFloat::ntt_mul(const BigFloat& a, const BigFloat& b, size_type output_pr
     res.data_      = ntt::ntt_mul(a.data_, b.data_, output_precision, &res.point_pos_);
     res.is_neg_    = a.is_neg_ ^ b.is_neg_;
     res.remove_leading_zero();
+    res.remove_tail_zero();
     return res;
 }
 
@@ -1106,11 +1107,11 @@ auto BigFloat::reciprocal(size_type precision) const -> BigFloat {
     b.remove_tail_zero();
     BigFloat  x(1 / b.to_double());
     size_type cur_precision = DOUBLE_MANTISSA_LEN / DIGIT_BITS;
-    // 牛顿迭代：x = x * (2 - b * x)
-    const BigFloat two(2);
+    // 牛顿迭代：x = x + x * (1 - b * x)
+    const BigFloat one(1);
     while (cur_precision < precision) {
         cur_precision *= 2;
-        x = ntt_mul(x, two - ntt_mul(b, x, cur_precision), cur_precision);
+        x += ntt_mul(x, one - ntt_mul(b, x, cur_precision + 1), cur_precision + 1);
     }
     x >>= exponent;
     return x;
