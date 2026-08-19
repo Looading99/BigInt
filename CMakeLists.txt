@@ -13,6 +13,8 @@ add_library(bigint STATIC
     src/bigint.cpp
     src/ntt_multithread.cpp
     src/ntt_mul.cpp
+    src/mul/fft.cpp
+    src/mul/ssa.cpp
 )
 add_library(bigint::bigint ALIAS bigint)
 
@@ -25,12 +27,12 @@ target_include_directories(bigint PUBLIC
 target_compile_options(
     bigint
     PRIVATE
-        $<$<CONFIG:Debug>:-mavx2 -Wall -Wextra -Wpedantic -Werror
+        $<$<CONFIG:Debug>:-mavx2 -mfma -Wall -Wextra -Wpedantic -Werror
             -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wcast-align
             -Woverloaded-virtual -Wnull-dereference -Wformat=2 
             -Wmisleading-indentation>
-        $<$<CONFIG:Release>:-mavx2 -flto>
-        $<$<CONFIG:RelWithDebInfo>:-mavx2 -flto>
+        $<$<CONFIG:Release>:-mavx2 -mfma -flto>
+        $<$<CONFIG:RelWithDebInfo>:-mavx2 -mfma -flto>
 )
 
 # ---- 示例/基准程序 ----

@@ -15,6 +15,7 @@
 
 
 #include "bigint/bigint.h"
+#include "bigint/mul.h"
 #include "bigint/ntt_mul.h"
 
 
@@ -28,7 +29,7 @@ BigInt::BigInt(const std::string& s, bool hex)
     if (hex) {
         constexpr uint8_t HEX_BITS = 4;
         constexpr uint8_t HEX_MAX  = (1 << HEX_BITS) - 1;
-        constexpr auto    hex_map  = [HEX_MAX] {
+        constexpr auto    hex_map  = [] {
             std::array<uint8_t, UINT8_MAX + 1> arr{};
             arr.fill(HEX_MAX + 1);
             for (uint8_t i = 0; i < TEN; ++i) {
@@ -533,7 +534,8 @@ auto BigInt::brute_mul(const BigInt& a, const BigInt& b) -> BigInt {
 
 auto BigInt::ntt_mul(const BigInt& a, const BigInt& b) -> BigInt {
     BigInt res;
-    res.data_   = ntt::ntt_mul(a.data_, b.data_);
+    res.data_ = ntt::ntt_mul(a.data_, b.data_);
+    // res.data_   = mul::mul_digits(a.data_, b.data_);
     res.is_neg_ = a.is_neg_ ^ b.is_neg_;
     res.remove_leading_zero();
     return res;
@@ -976,7 +978,8 @@ auto BigFloat::ntt_mul(const BigFloat& a, const BigFloat& b, size_type output_pr
     BigFloat res;
     res.point_pos_ = a.point_pos_ + b.point_pos_;
     res.data_      = ntt::ntt_mul(a.data_, b.data_, output_precision, &res.point_pos_);
-    res.is_neg_    = a.is_neg_ ^ b.is_neg_;
+    // res.data_   = mul::mul_digits(a.data_, b.data_, output_precision, &res.point_pos_);
+    res.is_neg_ = a.is_neg_ ^ b.is_neg_;
     res.remove_leading_zero();
     res.remove_tail_zero();
     return res;

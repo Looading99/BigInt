@@ -118,4 +118,21 @@ constexpr auto modinv(int64_t a, int64_t m) -> int64_t {
     return ((exgcd(a, m)[1] % m) + m) % m;
 }
 
+// 计算 ceil(a/b)
+template<std::unsigned_integral T> constexpr auto ceil_div(T a, T b) -> T {
+    return a / b + (a % b != 0);
+}
+
+// res = a + b，返回是否发生溢出
+template<std::unsigned_integral T> constexpr auto add_overflow(T a, T b, T& res) -> bool {
+    res = a + b;
+    return res < b;
+}
+
+// res = a - b，返回是否发生溢出
+template<std::unsigned_integral T> constexpr auto sub_overflow(T a, T b, T& res) -> bool {
+    res = a - b;
+    return res > a;
+}
+
 }  // namespace bigint
