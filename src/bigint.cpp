@@ -15,8 +15,13 @@
 
 
 #include "bigint/bigint.h"
-#include "bigint/mul.h"
-#include "bigint/ntt_mul.h"
+#include "bigint/bigint_base.h"
+
+#if USE_FFT_AND_SSA
+#    include "bigint/mul.h"
+#else
+#    include "bigint/ntt_mul.h"
+#endif
 
 
 namespace bigint {
@@ -534,8 +539,11 @@ auto BigInt::brute_mul(const BigInt& a, const BigInt& b) -> BigInt {
 
 auto BigInt::ntt_mul(const BigInt& a, const BigInt& b) -> BigInt {
     BigInt res;
+#if USE_FFT_AND_SSA
+    res.data_ = mul::mul_digits(a.data_, b.data_);
+#else
     res.data_ = ntt::ntt_mul(a.data_, b.data_);
-    // res.data_   = mul::mul_digits(a.data_, b.data_);
+#endif
     res.is_neg_ = a.is_neg_ ^ b.is_neg_;
     res.remove_leading_zero();
     return res;
@@ -977,8 +985,11 @@ auto BigFloat::ntt_mul(const BigFloat& a, const BigFloat& b, size_type output_pr
     -> BigFloat {
     BigFloat res;
     res.point_pos_ = a.point_pos_ + b.point_pos_;
-    res.data_      = ntt::ntt_mul(a.data_, b.data_, output_precision, &res.point_pos_);
-    // res.data_   = mul::mul_digits(a.data_, b.data_, output_precision, &res.point_pos_);
+#if USE_FFT_AND_SSA
+    res.data_ = mul::mul_digits(a.data_, b.data_, output_precision, &res.point_pos_);
+#else
+    res.data_ = ntt::ntt_mul(a.data_, b.data_, output_precision, &res.point_pos_);
+#endif
     res.is_neg_ = a.is_neg_ ^ b.is_neg_;
     res.remove_leading_zero();
     res.remove_tail_zero();

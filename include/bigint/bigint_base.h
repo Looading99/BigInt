@@ -4,6 +4,8 @@
 #    error "This library requires __uint128_t."
 #endif
 
+#define USE_FFT_AND_SSA false
+
 #include <array>
 #include <cassert>
 #include <concepts>
