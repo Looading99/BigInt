@@ -4,7 +4,9 @@
 #    error "This library requires __uint128_t."
 #endif
 
-#define USE_FFT_AND_SSA false
+#ifndef USE_FFT_AND_SSA
+#    define USE_FFT_AND_SSA false
+#endif
 
 #include <array>
 #include <cassert>
