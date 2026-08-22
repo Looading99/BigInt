@@ -10,6 +10,7 @@
 
 
 #include "bigint/bigint_base.h"
+#include "bigint/mul.h"
 
 
 namespace bigint {
@@ -281,15 +282,14 @@ public:
     }
 
     friend auto operator*(const BigInt& a, const BigInt& b) -> BigInt {
-        // digit 数之和 ≤ 此阈值时走朴素乘法（O(n²)），否则走 NTT。
-        // NTT 对小规模有固定开销，阈值过小会让小乘法白白付出建表/变换代价。
-        constexpr size_type BRUTE_LIMIT = 128;
         if (a.is_zero() || b.is_zero()) {
             return 0;
-        } else if (a.data_.size() + b.data_.size() <= BRUTE_LIMIT) {
-            return brute_mul(a, b);
         } else {
-            return ntt_mul(a, b);
+            BigInt res;
+            res.data_   = mul::mul_digits(a.data_, b.data_);
+            res.is_neg_ = a.is_neg_ ^ b.is_neg_;
+            res.remove_leading_zero();
+            return res;
         }
     }
     friend auto operator*(BigInt a, Integer64 auto b) -> BigInt { return a *= b; }
@@ -358,10 +358,6 @@ private:
     void unsigned_inplace_mul(uint64_t b);
 
     template<typename C, typename T> void unsigned_inplace_mul(T b);
-
-    static auto brute_mul(const BigInt& a, const BigInt& b) -> BigInt;
-
-    static auto ntt_mul(const BigInt& a, const BigInt& b) -> BigInt;
 
     static void shift_left(Digits& v, uint64_t offset);
 
@@ -562,7 +558,7 @@ public:
         if (a.is_zero() || b.is_zero()) {
             return 0;
         } else {
-            return ntt_mul(a, b);
+            return mul(a, b, 0);
         }
     }
 
@@ -575,7 +571,13 @@ public:
         if (a.is_zero() || b.is_zero()) {
             return 0;
         } else {
-            return ntt_mul(a, b, precision);
+            BigFloat res;
+            res.point_pos_ = a.point_pos_ + b.point_pos_;
+            res.data_      = mul::mul_digits(a.data_, b.data_, precision, &res.point_pos_);
+            res.is_neg_    = a.is_neg_ ^ b.is_neg_;
+            res.remove_leading_zero();
+            res.remove_tail_zero();
+            return res;
         }
     }
 
@@ -585,10 +587,6 @@ private:
     Digits  data_;
     int64_t point_pos_;
     bool    is_neg_;
-
-    static constexpr int32_t DOUBLE_MANTISSA_LEN  = 52;
-    static constexpr int32_t DOUBLE_EXPONENT_LEN  = 11;
-    static constexpr int32_t DOUBLE_EXPONENT_BIAS = 1023;
 
     explicit constexpr BigFloat()
         : point_pos_(0)

@@ -17,12 +17,6 @@
 #include "bigint/bigint.h"
 #include "bigint/bigint_base.h"
 
-#if USE_FFT_AND_SSA
-#    include "bigint/mul.h"
-#else
-#    include "bigint/ntt_mul.h"
-#endif
-
 
 namespace bigint {
 
@@ -509,46 +503,6 @@ auto BigInt::unsigned_inplace_divmod(uint64_t b) -> uint64_t {
     return rem;
 }
 
-auto BigInt::brute_mul(const BigInt& a, const BigInt& b) -> BigInt {
-    const size_type n = a.data_.size(), m = b.data_.size();
-    if (n == 0 || m == 0) {
-        unreachable();
-    }
-    BigInt res;
-    res.data_.resize(n + m + 2);
-    uint64_t carry = 0;
-    for (size_type j = 0; j < m; ++j) {
-        size_type i = 0;
-        for (; i < n; ++i) {
-            uint64_t digit =
-                static_cast<uint64_t>(a.data_[i]) * b.data_[j] + carry + res.data_[i + j];
-            res.data_[i + j] = static_cast<uint32_t>(digit) & DIGIT_MASK;
-            carry            = digit >> DIGIT_BITS;
-        }
-        while (carry) {
-            uint64_t digit   = res.data_[i + j] + carry;
-            res.data_[i + j] = static_cast<uint32_t>(digit) & DIGIT_MASK;
-            carry            = digit >> DIGIT_BITS;
-            ++i;
-        }
-    }
-    res.is_neg_ = a.is_neg_ ^ b.is_neg_;
-    res.remove_leading_zero();
-    return res;
-}
-
-auto BigInt::ntt_mul(const BigInt& a, const BigInt& b) -> BigInt {
-    BigInt res;
-#if USE_FFT_AND_SSA
-    res.data_ = mul::mul_digits(a.data_, b.data_);
-#else
-    res.data_ = ntt::ntt_mul(a.data_, b.data_);
-#endif
-    res.is_neg_ = a.is_neg_ ^ b.is_neg_;
-    res.remove_leading_zero();
-    return res;
-}
-
 void BigInt::shift_left(Digits& v, uint64_t offset) {
     if (v.size() == 0) {
         unreachable();
@@ -682,7 +636,7 @@ auto BigInt::divmod(const BigInt& b, RoundMode mode, bool check) const
 
     const size_type precision = a.data_.size() + PROTECT_PRECISION;
 
-    BigInt Q(BigFloat::ntt_mul(BigFloat(a), BigFloat(b).reciprocal(precision), precision), mode);
+    BigInt Q(BigFloat::mul(BigFloat(a), BigFloat(b).reciprocal(precision), precision), mode);
 
     BigInt R(a - Q * b);
 
@@ -981,21 +935,6 @@ auto BigFloat::add_or_sub(const BigFloat& a, const BigFloat& b, bool is_sub) -> 
     return res;
 }
 
-auto BigFloat::ntt_mul(const BigFloat& a, const BigFloat& b, size_type output_precision)
-    -> BigFloat {
-    BigFloat res;
-    res.point_pos_ = a.point_pos_ + b.point_pos_;
-#if USE_FFT_AND_SSA
-    res.data_ = mul::mul_digits(a.data_, b.data_, output_precision, &res.point_pos_);
-#else
-    res.data_ = ntt::ntt_mul(a.data_, b.data_, output_precision, &res.point_pos_);
-#endif
-    res.is_neg_ = a.is_neg_ ^ b.is_neg_;
-    res.remove_leading_zero();
-    res.remove_tail_zero();
-    return res;
-}
-
 void BigFloat::unsigned_inplace_mul(uint64_t b) {
     if (is_zero() || b == 1) {
         return;
@@ -1125,7 +1064,7 @@ auto BigFloat::reciprocal(size_type precision) const -> BigFloat {
     const BigFloat one(1);
     while (cur_precision < precision) {
         cur_precision *= 2;
-        x += ntt_mul(x, one - ntt_mul(b, x, cur_precision + 1), cur_precision + 1);
+        x += mul(x, one - mul(b, x, cur_precision + 1), cur_precision + 1);
     }
     x >>= exponent;
     return x;

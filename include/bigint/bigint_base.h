@@ -4,10 +4,6 @@
 #    error "This library requires __uint128_t."
 #endif
 
-#ifndef USE_FFT_AND_SSA
-#    define USE_FFT_AND_SSA false
-#endif
-
 #include <array>
 #include <cassert>
 #include <concepts>
@@ -29,7 +25,10 @@ using Digits = std::vector<uint32_t>;
 constexpr uint32_t DIGIT_BITS = 28;
 constexpr uint32_t DIGIT_MASK = (1u << DIGIT_BITS) - 1u;
 
-constexpr int32_t TEN = 10;
+constexpr int TEN                  = 10;
+constexpr int DOUBLE_MANTISSA_LEN  = 52;
+constexpr int DOUBLE_EXPONENT_LEN  = 11;
+constexpr int DOUBLE_EXPONENT_BIAS = 1023;
 
 using uint128_t = __uint128_t;
 

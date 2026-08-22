@@ -391,7 +391,6 @@ auto mul(std::span<const uint64_t> A, std::span<const uint64_t> B) -> std::vecto
 
     if (size_type buffer_required = ssa_size(m); buffer_required > buffer.size()) {
         buffer.clear();
-        buffer.shrink_to_fit();
         buffer.resize(buffer_required);
     }
 

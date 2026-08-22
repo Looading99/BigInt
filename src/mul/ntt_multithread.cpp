@@ -10,13 +10,13 @@
 #include <vector>
 
 
-#include "bigint/ntt.h"
-#include "bigint/ntt_multithread.h"
+#include "bigint/mul.h"
+#include "bigint/ntt_base.h"
 
 
 namespace bigint {
 
-namespace ntt_multithread {
+namespace mul::ntt_multithread {
 
 class NTTThreadPool {
 public:
@@ -27,16 +27,16 @@ public:
 
     // 交织式多模数 NTT
     struct IMMNTTTask : BaseTask {
-        Digits*   p_v;
-        size_type len;
-        bool      rev;
+        std::span<uint32_t> v;
+        size_type           len;
+        bool                rev;
 
         static constexpr size_type THRESHOLD           = 1024;
         static constexpr size_type BLOCK_THREAD_FACTOR = 4;
 
         void init(size_type total_threads) {
             if (total == 0) {
-                total      = p_v->size() / 2 / ntt::NUM_PRIMES;
+                total      = v.size() / 2 / ntt::NUM_PRIMES;
                 block_size = std::max(1ull, total / (total_threads * BLOCK_THREAD_FACTOR));
             }
         }
@@ -46,7 +46,6 @@ public:
             if (start >= end) {
                 return false;
             }
-            auto&           v    = *p_v;
             const size_type half = len / 2;
             const __m128i   simd_step =
                 ntt::mont::vec_to_simd(ntt::steps[rev][std::countr_zero(half)]);
@@ -65,7 +64,8 @@ public:
                 __m128i simd_a = ntt::mont::vec_to_simd({v[idx_a + 0], v[idx_a + 1], v[idx_a + 2]});
                 __m128i simd_b = ntt::mont::simd_mul(
                     simd_cur, ntt::mont::vec_to_simd({v[idx_b + 0], v[idx_b + 1], v[idx_b + 2]}));
-                // __m256i simd_add_sub = ntt::mont::simd_add_and_sub(simd_a, simd_b);
+                // __m256i simd_add_sub;
+                // ntt::mont::simd_add_and_sub(simd_a, simd_b, simd_add_sub);
                 // __m128i simd_a_add_b = _mm256_castsi256_si128(simd_add_sub);
                 // __m128i simd_a_sub_b = _mm256_extracti128_si256(simd_add_sub, 1);
                 __m128i simd_a_add_b = ntt::mont::simd_add(simd_a, simd_b);
@@ -79,7 +79,7 @@ public:
     };
 
     struct IMMMulNumTask : BaseTask {
-        Digits*                               p_v;
+        std::span<uint32_t>                   v;
         std::array<uint32_t, ntt::NUM_PRIMES> nums;
 
         static constexpr size_type THRESHOLD           = 2048;
@@ -87,13 +87,12 @@ public:
 
         void init(size_type total_threads) {
             if (total == 0) {
-                total      = p_v->size() / ntt::NUM_PRIMES;
+                total      = v.size() / ntt::NUM_PRIMES;
                 block_size = std::max(1ull, total / (total_threads * BLOCK_THREAD_FACTOR));
             }
         }
 
         auto run(size_type cur_block) -> bool {
-            auto&     v     = *p_v;
             size_type start = cur_block * block_size, end = std::min(start + block_size, total);
             if (start >= end) {
                 return false;
@@ -110,52 +109,49 @@ public:
     };
 
     struct IMMMulVecTask : BaseTask {
-        Digits*       p_v;
-        const Digits* p_v2;
+        std::span<uint32_t>       v1;
+        std::span<const uint32_t> v2;
 
         static constexpr size_type THRESHOLD           = 2048;
         static constexpr size_type BLOCK_THREAD_FACTOR = 4;
 
         void init(size_type total_threads) {
             if (total == 0) {
-                total      = p_v->size() / ntt::NUM_PRIMES;
+                total      = v1.size() / ntt::NUM_PRIMES;
                 block_size = std::max(1ull, total / (total_threads * BLOCK_THREAD_FACTOR));
             }
         }
 
         auto run(size_type cur_block) -> bool {
-            auto&       v     = *p_v;
-            const auto& v2    = *p_v2;
-            size_type   start = cur_block * block_size, end = std::min(start + block_size, total);
+            size_type start = cur_block * block_size, end = std::min(start + block_size, total);
             if (start >= end) {
                 return false;
             }
             for (size_type i = start * ntt::NUM_PRIMES; i < end * ntt::NUM_PRIMES;
                 i += ntt::NUM_PRIMES) {
-                __m128i simd_a = ntt::mont::vec_to_simd({v[i + 0], v[i + 1], v[i + 2]});
+                __m128i simd_a = ntt::mont::vec_to_simd({v1[i + 0], v1[i + 1], v1[i + 2]});
                 __m128i simd_b = ntt::mont::vec_to_simd({v2[i + 0], v2[i + 1], v2[i + 2]});
                 __m128i simd_r = ntt::mont::simd_mul(simd_a, simd_b);
-                ntt::mont::simd_store3(&v[i], simd_r);
+                ntt::mont::simd_store3(&v1[i], simd_r);
             }
             return end != total;
         }
     };
 
     struct CRTMergeTask : BaseTask {
-        Digits* p_v;
+        std::span<uint32_t> v;
 
         static constexpr size_type THRESHOLD           = 1024;
         static constexpr size_type BLOCK_THREAD_FACTOR = 4;
 
         void init(size_type total_threads) {
             if (total == 0) {
-                total      = p_v->size() / ntt::NUM_PRIMES;
+                total      = v.size() / ntt::NUM_PRIMES;
                 block_size = std::max(1ull, total / (total_threads * BLOCK_THREAD_FACTOR));
             }
         }
 
         auto run(size_type cur_block) -> bool {
-            auto&     v     = *p_v;
             size_type start = cur_block * block_size, end = std::min(start + block_size, total);
             if (start >= end) {
                 return false;
@@ -191,7 +187,6 @@ private:
         constexpr size_type                 CHECK_INTERVAL = 32;
 
         const auto spin_deadline = clock::now() + SPIN_TIMEOUT;
-        // NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while)
         do {
             std::this_thread::yield();
             for (size_type i = 0; i < CHECK_INTERVAL; ++i) {
@@ -294,7 +289,48 @@ static auto get_pool(uint32_t n = 0) -> NTTThreadPool& {
     return pool;
 }
 
-void imm_ntt(Digits& v, bool rev) {
+static void imm_mul_num(std::span<uint32_t> v, std::array<uint32_t, ntt::NUM_PRIMES> nums) {
+    const size_type n = v.size();
+    if (n == 0 || n % 3 != 0) {
+        unreachable();
+    }
+    auto& pool = get_pool();
+    if (n < ntt::NUM_PRIMES * NTTThreadPool::IMMMulNumTask::THRESHOLD || !pool.is_valid()) {
+        __m128i simd_nums = ntt::mont::vec_to_simd(nums);
+        for (size_type i = 0; i < n; i += ntt::NUM_PRIMES) {
+            __m128i simd_a = ntt::mont::vec_to_simd({v[i + 0], v[i + 1], v[i + 2]});
+            __m128i simd_r = ntt::mont::simd_mul(simd_a, simd_nums);
+            ntt::mont::simd_store3(&v[i], simd_r);
+        }
+    } else {
+        NTTThreadPool::IMMMulNumTask task({}, v, nums);
+        pool.run_task(&task);
+    }
+}
+
+static void imm_mul_vec(std::span<uint32_t> v1, std::span<const uint32_t> v2) {
+    const size_type n = v1.size();
+    if (n == 0 || n % 3 != 0 || n != v2.size()) {
+        unreachable();
+    }
+    auto& pool = get_pool();
+    if (n < ntt::NUM_PRIMES * NTTThreadPool::IMMMulNumTask::THRESHOLD || !pool.is_valid()) {
+        for (size_type i = 0; i < n; i += ntt::NUM_PRIMES) {
+            __m128i simd_a = ntt::mont::vec_to_simd({v1[i + 0], v1[i + 1], v1[i + 2]});
+            __m128i simd_b = ntt::mont::vec_to_simd({v2[i + 0], v2[i + 1], v2[i + 2]});
+            __m128i simd_r = ntt::mont::simd_mul(simd_a, simd_b);
+            ntt::mont::simd_store3(&v1[i], simd_r);
+        }
+    } else {
+        NTTThreadPool::IMMMulVecTask task({}, v1, v2);
+        pool.run_task(&task);
+    }
+}
+
+// Montgomery 域的交织式多模数 NTT (interleaved multi-modulus NTT)，
+// 对下标模 NUM_PRIMES 同余类分别应用模数为 P[i] 的 NTT，
+// 务必保证传入的数组长度是 2 的幂 * NUM_PRIMES 。
+static void imm_ntt(std::span<uint32_t> v, bool rev) {
     size_type n = v.size();
     if (n == ntt::NUM_PRIMES) {
         return;
@@ -319,7 +355,8 @@ void imm_ntt(Digits& v, bool rev) {
                         ntt::mont::vec_to_simd({v[idx_a + 0], v[idx_a + 1], v[idx_a + 2]});
                     __m128i simd_b = ntt::mont::simd_mul(simd_cur,
                         ntt::mont::vec_to_simd({v[idx_b + 0], v[idx_b + 1], v[idx_b + 2]}));
-                    // __m256i simd_add_sub = ntt::mont::simd_add_and_sub(simd_a, simd_b);
+                    // __m256i simd_add_sub;
+                    // ntt::mont::simd_add_and_sub(simd_a, simd_b, simd_add_sub);
                     // __m128i simd_a_add_b = _mm256_castsi256_si128(simd_add_sub);
                     // __m128i simd_a_sub_b = _mm256_extracti128_si256(simd_add_sub, 1);
                     __m128i simd_a_add_b = ntt::mont::simd_add(simd_a, simd_b);
@@ -331,7 +368,7 @@ void imm_ntt(Digits& v, bool rev) {
             }
         }
     } else {
-        NTTThreadPool::IMMNTTTask task({}, &v, 2, rev);
+        NTTThreadPool::IMMNTTTask task({}, v, 2, rev);
         for (task.len = 2; task.len <= n; task.len *= 2) {
             pool.run_task(&task);
         }
@@ -341,45 +378,10 @@ void imm_ntt(Digits& v, bool rev) {
     }
 }
 
-void imm_mul_num(Digits& v, std::array<uint32_t, ntt::NUM_PRIMES> nums) {
-    const size_type n = v.size();
-    if (n == 0 || n % 3 != 0) {
-        unreachable();
-    }
-    auto& pool = get_pool();
-    if (n < ntt::NUM_PRIMES * NTTThreadPool::IMMMulNumTask::THRESHOLD || !pool.is_valid()) {
-        __m128i simd_nums = ntt::mont::vec_to_simd(nums);
-        for (size_type i = 0; i < n; i += ntt::NUM_PRIMES) {
-            __m128i simd_a = ntt::mont::vec_to_simd({v[i + 0], v[i + 1], v[i + 2]});
-            __m128i simd_r = ntt::mont::simd_mul(simd_a, simd_nums);
-            ntt::mont::simd_store3(&v[i], simd_r);
-        }
-    } else {
-        NTTThreadPool::IMMMulNumTask task({}, &v, nums);
-        pool.run_task(&task);
-    }
-}
-
-void imm_mul_vec(Digits& v, const Digits& v2) {
-    const size_type n = v.size();
-    if (n == 0 || n % 3 != 0 || n != v2.size()) {
-        unreachable();
-    }
-    auto& pool = get_pool();
-    if (n < ntt::NUM_PRIMES * NTTThreadPool::IMMMulNumTask::THRESHOLD || !pool.is_valid()) {
-        for (size_type i = 0; i < n; i += ntt::NUM_PRIMES) {
-            __m128i simd_a = ntt::mont::vec_to_simd({v[i + 0], v[i + 1], v[i + 2]});
-            __m128i simd_b = ntt::mont::vec_to_simd({v2[i + 0], v2[i + 1], v2[i + 2]});
-            __m128i simd_r = ntt::mont::simd_mul(simd_a, simd_b);
-            ntt::mont::simd_store3(&v[i], simd_r);
-        }
-    } else {
-        NTTThreadPool::IMMMulVecTask task({}, &v, &v2);
-        pool.run_task(&task);
-    }
-}
-
-void crt_merge(Digits& v) {
+// 利用中国剩余定理从 imm_ntt 逆变换结果中复原出真实数据，
+// 拆成 3 个 DIGIT_BITS 位二进制数写回原位，
+// 调用者应当保证这样的拆分是安全的。
+void crt_merge(std::span<uint32_t> v) {
     const size_type n = v.size();
     if (n == 0 || n % 3 != 0) {
         unreachable();
@@ -395,15 +397,138 @@ void crt_merge(Digits& v) {
             v[i + 2] = x & DIGIT_MASK;
         }
     } else {
-        NTTThreadPool::CRTMergeTask task{{}, &v};
+        NTTThreadPool::CRTMergeTask task{{}, v};
         pool.run_task(&task);
     }
 }
 
-}  // namespace ntt_multithread
+}  // namespace mul::ntt_multithread
 
 void init_thread_pool(uint32_t n) {
-    ntt_multithread::get_pool(n == 0 ? 1 : n);
+    mul::ntt_multithread::get_pool(n == 0 ? 1 : n);
 }
+
+namespace mul::ntt {
+
+// 从 crt_merge 结果中复原位权并进位
+// 其位权为: 0, 1, 2 | 1, 2, 3 | 2, 3, 4 | ...
+// 设 i 为位权，j 为下标，有 i = j / 3 + j % 3
+// 反推出 j = 3 * i, 3 * (i - 1) + 1, 3 * (i - 2) + 2
+// 即 j = 3 * i, 3 * i - 2, 3 * i - 4
+static void trim(std::vector<uint32_t>& v) {
+    size_type new_size_ntt = v.size(), new_size = new_size_ntt / ntt::NUM_PRIMES;
+    if (new_size != 1) {
+        uint32_t digit = v[1] + v[3 * 1];
+        v[1]           = digit & NTT_DIGIT_MASK;
+        uint32_t carry = digit >> NTT_DIGIT_BITS;
+        for (size_type i = 2, j = i * ntt::NUM_PRIMES; i < new_size; ++i, j += ntt::NUM_PRIMES) {
+            digit = v[j - 4] + v[j - 2] + v[j] + carry;
+            v[i]  = digit & NTT_DIGIT_MASK;
+            carry = digit >> NTT_DIGIT_BITS;
+        }
+        digit           = v[new_size_ntt - 4] + v[new_size_ntt - 2] + carry;
+        v[new_size]     = digit & NTT_DIGIT_MASK;
+        carry           = digit >> NTT_DIGIT_BITS;
+        digit           = v[new_size_ntt + 3 - 4] + carry;
+        v[new_size + 1] = digit & NTT_DIGIT_MASK;
+        carry           = digit >> NTT_DIGIT_BITS;
+        v[new_size + 2] = carry;
+    }
+    size_type i = new_size == 1 ? 2 : new_size + 2;
+    while (v[i] == 0) {
+        --i;
+    }
+    v.resize(i + 1);
+}
+
+auto mul(std::span<const uint64_t> A, std::span<const uint64_t> B) -> std::vector<uint64_t> {
+    bool a_is_b = A.data() == B.data();
+
+    auto vec64_to_vec32_and_repeat = [](std::span<const uint64_t> src,
+                                         std::vector<uint32_t>&   dst,
+                                         int                      digit_bits,
+                                         int                      k) -> void {
+        uint32_t  mask     = (1u << digit_bits) - 1;
+        uint128_t tmp      = 0;
+        int       tmp_bits = 0;
+        size_type i = 0, n = src.size();
+        while (i < n) {
+            if (tmp_bits < digit_bits && i < n) {
+                tmp |= static_cast<uint128_t>(src[i]) << tmp_bits;
+                tmp_bits += 64;
+                ++i;
+            }
+            while (tmp_bits >= digit_bits) {
+                for (int j = 0; j < k; ++j) {
+                    dst.emplace_back(tmp & mask);
+                }
+                tmp >>= digit_bits;
+                tmp_bits -= digit_bits;
+            }
+        }
+        while (tmp) {
+            for (int j = 0; j < k; ++j) {
+                dst.emplace_back(tmp & mask);
+            }
+            tmp >>= digit_bits;
+        }
+    };
+
+    size_type new_size = std::bit_ceil(ceil_div<size_type>(A.size() * 64, NTT_DIGIT_BITS)
+                                       + ceil_div<size_type>(B.size() * 64, NTT_DIGIT_BITS) - 1),
+              new_size_ntt = new_size * 3;
+    std::vector<uint32_t> vec_a;
+    vec_a.reserve(new_size_ntt);
+    vec64_to_vec32_and_repeat(A, vec_a, NTT_DIGIT_BITS, NUM_PRIMES);
+    vec_a.resize(new_size_ntt);
+    ntt_multithread::imm_mul_num(vec_a, mont::R_sq);
+    ntt_multithread::imm_ntt(vec_a, false);
+
+    if (a_is_b) {
+        ntt_multithread::imm_mul_vec(vec_a, vec_a);
+    } else {
+        std::vector<uint32_t> vec_b;
+        vec_b.reserve(new_size_ntt);
+        vec64_to_vec32_and_repeat(B, vec_b, NTT_DIGIT_BITS, NUM_PRIMES);
+        vec_b.resize(new_size_ntt);
+        ntt_multithread::imm_mul_num(vec_b, mont::R_sq);
+        ntt_multithread::imm_ntt(vec_b, false);
+        ntt_multithread::imm_mul_vec(vec_a, vec_b);
+    }
+
+    ntt_multithread::imm_ntt(vec_a, true);
+    ntt_multithread::imm_mul_num(vec_a, {1, 1, 1});
+    ntt_multithread::crt_merge(vec_a);
+    trim(vec_a);
+
+    std::vector<uint64_t> res;
+    res.reserve(ceil_div<size_type>(vec_a.size() * NTT_DIGIT_BITS, 64));
+    {
+        uint128_t tmp      = 0;
+        int       tmp_bits = 0;
+        size_type i = 0, n = vec_a.size();
+        while (i < n) {
+            while (tmp_bits < 64 && i < n) {
+                tmp |= static_cast<uint128_t>(vec_a[i]) << tmp_bits;
+                tmp_bits += NTT_DIGIT_BITS;
+                ++i;
+            }
+            if (tmp_bits >= 64) {
+                res.emplace_back(tmp);
+                tmp_bits -= 64;
+                tmp >>= 64;
+            }
+        }
+        if (tmp) {
+            res.emplace_back(tmp);
+        } else {
+            utils::remove_leading_zero(res);
+        }
+    }
+
+    return res;
+}
+
+}  // namespace mul::ntt
 
 }  // namespace bigint

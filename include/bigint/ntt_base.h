@@ -9,12 +9,15 @@
 #include "bigint/bigint_base.h"
 
 
-namespace bigint::ntt {
+namespace bigint::mul::ntt {
 
 constexpr uint8_t                          NUM_PRIMES = 3;
 constexpr std::array<uint32_t, NUM_PRIMES> P          = {469762049, 2013265921, 2281701377};
-static_assert(DIGIT_MASK < std::ranges::min(P));
-constexpr std::array<uint32_t, NUM_PRIMES> G = {3, 31, 3};
+constexpr std::array<uint32_t, NUM_PRIMES> G          = {3, 31, 3};
+
+constexpr int      NTT_DIGIT_BITS = 28;
+constexpr uint32_t NTT_DIGIT_MASK = (1u << NTT_DIGIT_BITS) - 1;
+static_assert(NTT_DIGIT_MASK < std::ranges::min(P));
 
 constexpr uint32_t MAX_TRANSFORM_LEN_EXP =
     std::ranges::min(P | std::ranges::views::transform([](uint32_t p) -> uint32_t {
@@ -145,7 +148,7 @@ inline auto simd_sub(const __m128i& a, const __m128i& b) -> __m128i {
     return _mm_add_epi32(t, _mm_and_si128(mask, p));
 }
 
-inline auto simd_add_and_sub(const __m128i& a, const __m128i& b) -> __m256i {
+inline void simd_add_and_sub(const __m128i& a, const __m128i& b, __m256i& res) {
     const __m256i mask2 = _mm256_set_epi32(0, 0, 0, 0, -1, -1, -1, -1);
     const __m256i sign  = _mm256_set1_epi32(1 << 31);
     // (p, -p)
@@ -172,8 +175,7 @@ inline auto simd_add_and_sub(const __m128i& a, const __m128i& b) -> __m256i {
     // (a>=p-b, a<b)
     mask = _mm256_xor_si256(mask, mask2);
     // (a>=p-b?a+b-p:a+b, a<b?a-b+p:a-b)
-    __m256i result256 = _mm256_sub_epi32(T, _mm256_and_si256(mask, Pv));
-    return result256;
+    res = _mm256_sub_epi32(T, _mm256_and_si256(mask, Pv));
 }
 
 inline auto fast_pow(__m128i base, uint32_t exponent) -> __m128i {
@@ -245,7 +247,7 @@ constexpr auto garner_merge(uint32_t c0, uint32_t c1, uint32_t c2) -> uint128_t 
 
 
 // 位逆序置换
-inline void bit_swap(Digits& v) {
+inline void bit_swap(std::span<uint32_t> v) {
     const size_type n = v.size();
     if (is_invalid_ntt_len(n)) {
         unreachable();
@@ -263,7 +265,7 @@ inline void bit_swap(Digits& v) {
 }
 
 // 多重位逆序置换，对每个下标模 NUM_PRIMES 同余类分别做位逆序置换
-inline void multi_bit_swap(Digits& v) {
+inline void multi_bit_swap(std::span<uint32_t> v) {
     size_type n = v.size();
     if (n % NUM_PRIMES != 0 || is_invalid_ntt_len(n / NUM_PRIMES)) {
         unreachable();
@@ -303,4 +305,4 @@ inline void copy_repeat(const Digits& v_in, size_type offset, size_type k, Digit
     }
 }
 
-}  // namespace bigint::ntt
+}  // namespace bigint::mul::ntt
