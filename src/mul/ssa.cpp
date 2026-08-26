@@ -92,7 +92,7 @@ static void mod(std::span<uint64_t> A, size_type m) {
         return;
     }
     // 将 A 每 w 个数分割成 k 块
-    size_type k = ceil_div(A.size(), w);
+    auto k = ceil_div<size_type>(A.size(), w);
     // A mod = A_0 - A_1 + A_2 - A_3 + ...。
     // 迭代 R = (A_i - R) mod (2^m+1) for i from 1 to k-1，初始值为 A_0
     // R 有 w + 1 位，注意 i = 1 时 R 最高位与 A_1 重叠，读取时跳过即可

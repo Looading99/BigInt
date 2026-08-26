@@ -245,7 +245,7 @@ inline auto mul_digits(const Digits& a, const Digits& b, size_type output_precis
     auto digits_to_vec64 = [](const Digits& x, size_type offset) -> std::vector<uint64_t> {
         const size_type       n = x.size();
         std::vector<uint64_t> res;
-        res.reserve(ceil_div((n - offset) * DIGIT_BITS, 64ull));
+        res.reserve(ceil_div<size_type>((n - offset) * DIGIT_BITS, 64ull));
         uint128_t tmp      = 0;
         size_type tmp_bits = 0;
         size_type i        = offset;
