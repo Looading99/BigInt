@@ -1,28 +1,32 @@
 # BigInt
 
-基于 **多模数NTT** 的高性能高精度整数 / 高精度小数 C++20 库，使用多线程与 AVX2 向量化加速。
+基于 **FFT / 多模数 NTT / SSA 多算法自动分发** 的高性能高精度整数 / 高精度小数 C++20 库，使用多线程 NTT 与 AVX2+FMA 向量化加速。
 
 ## 特性
 
 - **高精度整数 `BigInt`**：支持任意位长的整数四则运算、位运算、比较、字符串互转、快速幂、`get_pow_of_ten`、`divmod` 及多种舍入模式。
 - **高精度小数 `BigFloat`**：支持从 `BigInt` / 整型 / 字符串（不支持解析字符串中的小数点）构造、与 `double` 互转、转换成字符串、按精度舍入、求倒数（`reciprocal`）。
-- **NTT 快速乘法**：三模数 NTT + Montgomery 模乘 + AVX2 SIMD 向量化。
-- **多线程**：`init_thread_pool` 可指定工作线程数，大数乘法自动并行；本库线程安全，可被多个线程并发使用。
+- **多算法快速乘法**：按输入规模自动分发 `brute → fft → ntt → ssa`；FFT 采用基-4 变换与动态 digit_bits（AVX2+FMA），NTT 为三模数 + Montgomery 模乘，SSA 处理超大规模。
+- **多线程**：`init_thread_pool` 可指定工作线程数，NTT 大数乘法自动并行；本库线程安全，可被多个线程并发使用。
 - **易于集成**：CMake 静态库目标 `bigint::bigint`，支持 `find_package` 安装导出。
 
 ## 目录结构
 
 ```
 include/bigint/
-    bigint_base.h        # 基础类型与工具（Digits、模运算、快速幂等）
+    bigint_base.h        # 基础类型与工具（Digits、128 位类型支持、Integral/make_unsigned、模运算）
     bigint.h             # BigInt / BigFloat 公开 API
-    ntt.h                # NTT 基础（常量定义、位逆序置换、Montgomery 算法、SIMD 实现）
-    ntt_multithread.h    # 多线程 NTT 接口
-    ntt_mul.h            # NTT 乘法接口
+    mul.h                # 统一乘法接口（brute/fft/ntt/ssa 分发、mul_digits）
+    ntt_base.h           # NTT 基础（常量定义、Montgomery 算法、SIMD 实现）
+    aligned_allocator.h  # SIMD 对齐分配器（FFT使用）
 src/
     bigint.cpp           # BigInt / BigFloat 实现
-    ntt_multithread.cpp  # 多线程 NTT 实现
-    ntt_mul.cpp          # NTT 乘法实现
+    mul/
+        fft.cpp              # FFT 乘法（基-4、动态 digit_bits、AVX2+FMA）
+        ntt_multithread.cpp  # 多线程 NTT 乘法
+        ssa.cpp              # SSA 乘法
+tests/
+    measure_digit_bits.cpp   # FFT digit_bits 精度测量与随机回归（目标 test_fft_digit_bits）
 examples/
     benchmark.cpp        # 基准测试示例程序（目标 bigint_benchmark）
     binary_split.cpp     # 二进制分裂算法模板（ main() 中为计算e的示例）（目标 bst）
@@ -38,8 +42,8 @@ cmake/
 
 - CMake ≥ 3.15
 - 支持 C++20 的编译器：GCC ≥ 10 或 Clang ≥ 12
-- 需要 `__uint128_t` 与 AVX2（`-mavx2`）支持
-- ⚠️ **不支持 MSVC**（缺少 `__uint128_t`）
+- 需要 `__uint128_t`/`__int128_t` 与 AVX2 + FMA（`-mavx2 -mfma`）支持
+- ⚠️ **MSVC 编译器不支持**（缺 `__uint128_t`）；**clang 的 Windows MSVC target**（如 LLVM 官方二进制）已支持——CMake 会自动链接 compiler-rt builtins 提供 128 位除法/取模运行时函数
 - CMake 生成器无强制要求，可按平台选用，如：
 
 ```bash
@@ -59,7 +63,8 @@ cmake --build build
 构建产物：
 
 - `libbigint.a` — 静态库
-- examples 中的测试示例（`-DBUILD_EXAMPLES=OFF` 可关闭）
+- examples 中的示例（`bigint_benchmark` / `bst` / `pi`，`-DBUILD_EXAMPLES=OFF` 可关闭）
+- `test_fft_digit_bits` — FFT 精度测试（`-DBUILD_TESTS=OFF` 可关闭）
 
 ## 安装与集成
 
@@ -150,25 +155,26 @@ int main() {
 
 | 类别 | API |
 | --- | --- |
-| 构造 | 任意无/有符号整型<sup>[1]</sup>、`std::string`（`hex=false` 十进制 / `true` 十六进制）、`BigFloat`（移动/拷贝；可指定舍入模式） |
+| 构造 | 任意无/有符号整型<sup>[1]</sup>、`std::string`（`hex=false` 十进制 / `true` 十六进制）、`BigFloat`（移动/拷贝；可指定舍入模式）<sup>[2]</sup> |
 | 查询 | `len()`、`get_data()`、`is_zero()`、`sign()` |
 | 转换 | `to_string(hex=false)`、`print(ostream, hex=false, direct=false)` |
-| 算数运算 | `+ - * / += -= *= /=`<sup>[2]</sup>、`++ --`<sup>[3]</sup>、一元 `+ -`、`unsigned_inplace_divmod(uint64_t)`、`divmod(BigInt, RoundMode)` |
-| 位运算<sup>[4]</sup> |  `& \| ^ << >>` 及对应复合赋值<sup>[5]</sup>、`bitwise_not(len)`原地按位取反（无 `~` ） |
-| 比较 |`compare_abs(a, b)`无符号比较、`<=>`、`==`（含与编译期常量 `0`<sup>[6]</sup> 的快速比较） |
+| 算数运算 | `+ - * / += -= *= /=`<sup>[3]</sup>、`++ --`<sup>[4]</sup>、一元 `+ -`、`unsigned_inplace_divmod(uint64_t)`、`divmod(BigInt, RoundMode)` |
+| 位运算<sup>[5]</sup> |  `& \| ^ << >>` 及对应复合赋值<sup>[6]</sup>、`bitwise_not(len)`原地按位取反（无 `~` ） |
+| 比较 |`compare_abs(a, b)`无符号比较、`<=>`、`==`（含与编译期常量 `0`<sup>[7]</sup> 的快速比较） |
 | 其他 | `reset()`、`flip_sign()`、`remove_sign()`、流输入输出 `<< >>`、`get_pow_of_ten()` |
 
 >注：<br>
 >[1] :包括`__uint128_t`和`__int128_t` <br>
->[2] :`+ - *` 及对应的复合赋值支持 64 位整数和`BigInt`，`/`和`/=`仅支持64位整数（与`BigInt`间求商余请使用`divmod`，支持四种商的舍入模式）；另外，`+= -=`是原地的， `*= /=` 与 64 位整型之间是原地的，可优先考虑使用它们 <br>
->[3] :包括前置和后置，后置会返回值改变前的副本，如无特殊需求请使用前置 <br>
->[4] :位运算忽略`BigInt`的符号，且运算后移除前导零 <br>
->[5] :复合赋值是原地的；移位可传入负数，相当于反向移位 <br>
->[6] :隐式转换为 `nullptr` 
+>[2] :除拷贝/移动外，构造函数均为 `explicit`，需直接初始化（不支持隐式转换）<br>
+>[3] :`+ - *` 及对应的复合赋值支持 64 位整数和`BigInt`，`/`和`/=`仅支持64位整数（与`BigInt`间求商余请使用`divmod`，支持四种商的舍入模式）；另外，`+= -=`是原地的， `*= /=` 与 64 位整型之间是原地的，可优先考虑使用它们 <br>
+>[4] :包括前置和后置，后置会返回值改变前的副本，如无特殊需求请使用前置 <br>
+>[5] :位运算忽略`BigInt`的符号，且运算后移除前导零 <br>
+>[6] :复合赋值是原地的；移位可传入负数，相当于反向移位 <br>
+>[7] :隐式转换为 `nullptr`
 
 ### `bigint::BigFloat` — 高精度小数
 
-- 构造：`BigInt`（移动/拷贝）、整型、字符串（可带 `offset`）、`double`
+- 构造：`BigInt`（移动/拷贝）、整型、字符串（可带 `offset`）、`double`（除拷贝/移动外均为 `explicit`）
 - 方法：`sign()`、`to_double()`、`to_string(dec_digits)`、`print(ostream, dec_digits, direct)`、`reciprocal(precision)`、`round(mode, precision, relative)`、`get_data()`、`get_point_pos()`等
 - 运算：`+ -`、乘法`*`和`mul(a, b, precision)`（`*`无精度限制，`mul`需传入目标精度）、`<< >> <<= >>=`（二进制移位，等价于乘/除以 2 的幂，可传入负数）、一元 `+ -`
 - 舍入模式 `RoundMode`：`Truncate` / `Floor` / `Ceil` / `RoundHalfUp`（别名 `Round`）
@@ -186,13 +192,18 @@ int main() {
 ## 实现说明
 
 - **表示方式**：以 `2^28` 为基数（`DIGIT_BITS = 28`）、小端序 `uint32_t` 数组存储，无前导零。
-- **乘法**：使用三模数 NTT，结合 Montgomery 模乘、AVX2 向量化，多线程下分块并行。
-- **理论最大值**：受 NTT 最大变换长度限制，可表示整数的理论最大值约为 2^(28·2^26)（每个数 `DIGIT_BITS = 28` 二进制位 × 最大变换长度 2^26，后者由三个 NTT 素数中 2 的幂因子最小值决定）。
-- **线程池**：有超时忙等（默认`5ms`）+ 动态块大小 + 工作窃取 的任务模型，8 线程时 NTT 乘法相对单线程约 3.6~4.3× 加速。
+- **乘法**：按输入规模自动分发 `brute → fft → ntt → ssa`（统一入口 `bigint::mul::mul_digits`）：
+  - **朴素**：小规模（≤ ~16K bit）
+  - **FFT**：基-4 变换 + 动态 digit_bits（默认下限 10，覆盖约 10.49M bit），AVX2+FMA 向量化（单线程）
+  - **NTT**：三模数 + Montgomery 模乘 + SIMD，多线程，覆盖至约 33M bit
+  - **SSA**：超过 NTT 容量的超大规模
+- **理论规模上限**：FFT 与 NTT 各有容量上限；SSA 无固定上限（仅受内存与时间约束）。
+- **NTT线程池**：有超时忙等（默认`5ms`）+ 动态块大小 + 工作窃取 的任务模型，8 线程时相对单线程约 3.6~4.3× 加速。
 
 ## 已知限制
 
-- 线程池的线程数超过 CPU 并行数（排除 LPE 核心）时性能下降严重，建议根据具体 CPU 情况手动指定线程数。
-- 不支持 MSVC 编译。
+- NTT 线程池的线程数超过 CPU 并行数（排除 LPE 核心）时性能下降严重，建议根据具体 CPU 情况手动指定线程数。
+- FFT 只能进行基-4变换且需要逆序置换，性能浪费严重；暂时不支持多线程。
+- MSVC 编译器不支持（缺 `__uint128_t`）；建议使用 GCC / Clang，或 clang 的 Windows MSVC target。
 - `BigFloat` 不支持比较运算，建议作差后判断符号。
-- 部分功能依赖 AVX2，需在支持的 CPU 上编译运行。
+- 部分功能依赖 AVX2 与 FMA，需在支持的 CPU 上编译运行。
