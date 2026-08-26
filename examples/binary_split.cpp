@@ -35,7 +35,7 @@ auto bst(size_type r, lambda_P P, lambda_Q Q, lambda_R R) -> std::pair<BigFloat,
     std::vector<Entry> segs;
     segs.reserve(std::bit_width(r));
     for (size_type i = 1; i <= r; ++i) {
-        BigInt val_P = P(i), val_Q = Q(i), val_R = R(i);
+        BigInt val_P(P(i)), val_Q(Q(i)), val_R(R(i));
         bool   moved = false;
         for (auto& seg : segs) {
             if (!seg.valid) {
@@ -51,7 +51,7 @@ auto bst(size_type r, lambda_P P, lambda_Q Q, lambda_R R) -> std::pair<BigFloat,
             val_R     = val_R * seg.val_R;
         }
         if (!moved) {
-            segs.emplace_back(val_P, val_Q, val_R, true);
+            segs.emplace_back(std::move(val_P), std::move(val_Q), std::move(val_R), true);
         }
     }
 
@@ -77,9 +77,9 @@ auto bst(size_type r, lambda_P P, lambda_Q Q, lambda_R R) -> std::pair<BigFloat,
 auto main() -> int {
     init_thread_pool(8);
     // 示例：计算 e
-    auto P = [](size_type x) { return 1; };
-    auto Q = [](size_type x) { return x; };
-    auto R = [](size_type x) { return 1; };
+    auto P = [](size_type x) { return BigInt(1); };
+    auto Q = [](size_type x) { return BigInt(x); };
+    auto R = [](size_type x) { return BigInt(1); };
 
     size_type dec_digits = 0;
     std::cout << "input target e precision(decimal digits): ";

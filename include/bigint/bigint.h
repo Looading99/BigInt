@@ -52,10 +52,10 @@ public:
     static std::array<size_type, 2>           DEC_STRING_BRUTE_THRESHOLDS;
     static constexpr std::array<size_type, 2> DEC_STRING_BRUTE_THRESHOLDS_DEFAULT = {5000, 2000};
 
-    constexpr BigInt(std::unsigned_integral auto x)
+    explicit constexpr BigInt(UnsignedIntegral auto x)
         : BigInt(x, false) {}
 
-    constexpr BigInt(std::signed_integral auto x)
+    explicit constexpr BigInt(SignedIntegral auto x)
         : BigInt(to_unsigned_abs(x), x < 0) {}
 
     // 拷贝
@@ -80,7 +80,7 @@ public:
     }
 
     // 忽略一切非法字符，字符串开头到第一个合法字符之间有 '-' 则结果为负
-    BigInt(const std::string& s, bool hex = false);
+    explicit BigInt(const std::string& s, bool hex = false);
 
     explicit BigInt(const BigFloat& x, RoundMode mode = RoundMode::Truncate);
 
@@ -133,7 +133,7 @@ public:
     constexpr auto operator+() const -> BigInt { return *this; }
 
     constexpr auto operator-() const -> BigInt {
-        BigInt res = *this;
+        BigInt res(*this);
         res.flip_sign();
         return res;
     }
@@ -269,12 +269,27 @@ public:
         return input;
     }
 
-    friend auto operator+(BigInt a, const BigInt& b) -> BigInt { return a += b; }
-    friend auto operator+(BigInt a, Integer64 auto b) -> BigInt { return a += b; }
-    friend auto operator+(Integer64 auto a, BigInt b) -> BigInt { return b += a; }
+    friend auto operator+(BigInt a, const BigInt& b) -> BigInt {
+        a += b;
+        return a;
+    }
+    friend auto operator+(BigInt a, Integer64 auto b) -> BigInt {
+        a += b;
+        return a;
+    }
+    friend auto operator+(Integer64 auto a, BigInt b) -> BigInt {
+        b += a;
+        return b;
+    }
 
-    friend auto operator-(BigInt a, const BigInt& b) -> BigInt { return a -= b; }
-    friend auto operator-(BigInt a, Integer64 auto b) -> BigInt { return a -= b; }
+    friend auto operator-(BigInt a, const BigInt& b) -> BigInt {
+        a -= b;
+        return a;
+    }
+    friend auto operator-(BigInt a, Integer64 auto b) -> BigInt {
+        a -= b;
+        return a;
+    }
     friend auto operator-(Integer64 auto a, BigInt b) -> BigInt {
         b -= a;
         b.flip_sign();
@@ -283,7 +298,7 @@ public:
 
     friend auto operator*(const BigInt& a, const BigInt& b) -> BigInt {
         if (a.is_zero() || b.is_zero()) {
-            return 0;
+            return BigInt(0);
         } else {
             BigInt res;
             res.data_   = mul::mul_digits(a.data_, b.data_);
@@ -292,20 +307,44 @@ public:
             return res;
         }
     }
-    friend auto operator*(BigInt a, Integer64 auto b) -> BigInt { return a *= b; }
-    friend auto operator*(Integer64 auto a, BigInt b) -> BigInt { return b *= a; }
+    friend auto operator*(BigInt a, Integer64 auto b) -> BigInt {
+        a *= b;
+        return a;
+    }
+    friend auto operator*(Integer64 auto a, BigInt b) -> BigInt {
+        b *= a;
+        return b;
+    }
 
-    friend auto operator/(BigInt a, Integer64 auto b) -> BigInt { return a /= b; }
+    friend auto operator/(BigInt a, Integer64 auto b) -> BigInt {
+        a /= b;
+        return a;
+    }
 
-    friend auto operator<<(BigInt a, Integer64 auto offset) -> BigInt { return a <<= offset; }
-    friend auto operator>>(BigInt a, Integer64 auto offset) -> BigInt { return a >>= offset; }
+    friend auto operator<<(BigInt a, Integer64 auto offset) -> BigInt {
+        a <<= offset;
+        return a;
+    }
+    friend auto operator>>(BigInt a, Integer64 auto offset) -> BigInt {
+        a >>= offset;
+        return a;
+    }
 
     // 忽略符号。
-    friend auto operator&(BigInt a, const BigInt& b) -> BigInt { return a &= b; }
+    friend auto operator&(BigInt a, const BigInt& b) -> BigInt {
+        a &= b;
+        return a;
+    }
     // 忽略符号。
-    friend auto operator|(BigInt a, const BigInt& b) -> BigInt { return a |= b; }
+    friend auto operator|(BigInt a, const BigInt& b) -> BigInt {
+        a |= b;
+        return a;
+    }
     // 忽略符号。
-    friend auto operator^(BigInt a, const BigInt& b) -> BigInt { return a ^= b; }
+    friend auto operator^(BigInt a, const BigInt& b) -> BigInt {
+        a ^= b;
+        return a;
+    }
 
     // 返回商和余数。可以通过传入 mode 控制商的舍入方向。
     // 不传入或传入枚举范围之外的值视为截断。默认进行结果检查。
@@ -324,7 +363,7 @@ private:
     explicit constexpr BigInt()
         : is_neg_(false) {}
 
-    explicit constexpr BigInt(std::unsigned_integral auto value, bool is_neg)
+    explicit constexpr BigInt(UnsignedIntegral auto value, bool is_neg)
         : is_neg_(is_neg) {
         if (value == 0) {
             data_.push_back(0);
@@ -397,14 +436,14 @@ public:
     }
 
     // 委托给 BigInt 构造
-    BigFloat(std::integral auto value, int64_t offset = 0)
+    explicit BigFloat(std::integral auto value, int64_t offset = 0)
         : BigFloat(BigInt(value), offset) {}
 
     // 委托给 BigInt 构造，不支持处理字符串中的小数点！
-    BigFloat(const std::string& s, bool hex = false, int64_t offset = 0)
+    explicit BigFloat(const std::string& s, bool hex = false, int64_t offset = 0)
         : BigFloat(BigInt(s, hex), offset) {}
 
-    BigFloat(double value);
+    explicit BigFloat(double value);
 
     // 拷贝
     BigFloat(const BigFloat&)                    = default;
@@ -495,7 +534,7 @@ public:
     [[nodiscard]] constexpr auto operator+() const -> BigFloat { return *this; }
 
     [[nodiscard]] constexpr auto operator-() const -> BigFloat {
-        BigFloat res = *this;
+        BigFloat res(*this);
         res.flip_sign();
         return res;
     }
@@ -542,8 +581,14 @@ public:
         return *this;
     }
 
-    friend auto operator<<(BigFloat x, int64_t offset) -> BigFloat { return x <<= offset; }
-    friend auto operator>>(BigFloat x, int64_t offset) -> BigFloat { return x >>= offset; }
+    friend auto operator<<(BigFloat x, int64_t offset) -> BigFloat {
+        x <<= offset;
+        return x;
+    }
+    friend auto operator>>(BigFloat x, int64_t offset) -> BigFloat {
+        x >>= offset;
+        return x;
+    }
 
     friend auto operator+(const BigFloat& a, const BigFloat& b) -> BigFloat {
         return add_or_sub(a, b, false);
@@ -556,20 +601,24 @@ public:
     // 建议使用 mul 指定精度
     friend auto operator*(const BigFloat& a, const BigFloat& b) -> BigFloat {
         if (a.is_zero() || b.is_zero()) {
-            return 0;
+            return BigFloat(0);
         } else {
             return mul(a, b, 0);
         }
     }
 
-    // 与 64 位整型的乘法：复用 operator*= 就地计算，
-    // 避免隐式构造 BigFloat 临时再走 NTT。
-    friend auto operator*(BigFloat a, Integer64 auto b) -> BigFloat { return a *= b; }
-    friend auto operator*(Integer64 auto a, BigFloat b) -> BigFloat { return b *= a; }
+    friend auto operator*(BigFloat a, Integer64 auto b) -> BigFloat {
+        a *= b;
+        return a;
+    }
+    friend auto operator*(Integer64 auto a, BigFloat b) -> BigFloat {
+        b *= a;
+        return b;
+    }
 
     static auto mul(const BigFloat& a, const BigFloat& b, size_type precision) -> BigFloat {
         if (a.is_zero() || b.is_zero()) {
-            return 0;
+            return BigFloat(0);
         } else {
             BigFloat res;
             res.point_pos_ = a.point_pos_ + b.point_pos_;

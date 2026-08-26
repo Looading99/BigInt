@@ -18,6 +18,23 @@ add_library(bigint STATIC
 )
 add_library(bigint::bigint ALIAS bigint)
 
+# clang + MSVC target（如 LLVM 官方 Windows 二进制默认 x86_64-pc-windows-msvc）：
+# NMake 生成器以 -nostdlib 链接、不自动链接 compiler-rt builtins，导致 __uint128_t
+# 除法/取模的运行时函数（__udivti3/__umodti3 等）未定义。这里显式链接 builtins 库。
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")
+    get_filename_component(_llvm_bin "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    get_filename_component(_llvm_root "${_llvm_bin}" DIRECTORY)
+    file(GLOB _clang_rt_builtins
+        "${_llvm_root}/lib/clang/*/lib/windows/clang_rt.builtins-*.lib")
+    if(_clang_rt_builtins)
+        target_link_libraries(bigint PUBLIC "${_clang_rt_builtins}")
+        message(STATUS "Linking clang compiler-rt builtins: ${_clang_rt_builtins}")
+    else()
+        message(WARNING
+            "clang compiler-rt builtins not found (needed for __udivti3 etc.)")
+    endif()
+endif()
+
 # 构建时使用源码树中的 include，安装后使用安装前缀下的 include。
 target_include_directories(bigint PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -27,12 +44,13 @@ target_include_directories(bigint PUBLIC
 target_compile_options(
     bigint
     PRIVATE
-        $<$<CONFIG:Debug>:-mavx -mavx2 -mfma -Wall -Wextra -Wpedantic -Werror
+        -mavx -mavx2 -mfma
+        $<$<CONFIG:Debug>:-Wall -Wextra -Wpedantic -Werror
             -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wcast-align
             -Woverloaded-virtual -Wnull-dereference -Wformat=2 
             -Wmisleading-indentation>
-        $<$<CONFIG:Release>:-mavx -mavx2 -mfma -flto>
-        $<$<CONFIG:RelWithDebInfo>:-mavx -mavx2 -mfma -flto>
+        $<$<CONFIG:Release>:-flto>
+        $<$<CONFIG:RelWithDebInfo>:-flto>
 )
 
 # ---- 示例/基准程序 ----

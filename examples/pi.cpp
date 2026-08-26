@@ -57,7 +57,7 @@ auto bst(size_type r) -> std::pair<BigInt, BigInt> {
             val_R     = val_R * seg.val_R;
         }
         if (!moved) {
-            segs.emplace_back(val_P, val_Q, val_R, true);
+            segs.emplace_back(std::move(val_P), std::move(val_Q), std::move(val_R), true);
         }
     }
     BigInt val_P(0), val_Q(0), val_R(0);

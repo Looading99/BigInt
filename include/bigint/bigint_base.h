@@ -31,6 +31,7 @@ constexpr int DOUBLE_EXPONENT_LEN  = 11;
 constexpr int DOUBLE_EXPONENT_BIAS = 1023;
 
 using uint128_t = __uint128_t;
+using int128_t  = __int128_t;
 
 using size_type = std::size_t;
 
@@ -45,20 +46,51 @@ inline void unreachable() {
 #endif
 }
 
+// 无符号整型。
+template<typename T>
+concept UnsignedIntegral =
+    !std::is_same_v<std::remove_cv_t<T>, bool>
+    && (std::is_unsigned_v<T> || std::is_same_v<std::remove_cv_t<T>, uint128_t>);
+
+// 有符号整型。
+template<typename T>
+concept SignedIntegral = !std::is_same_v<std::remove_cv_t<T>, bool>
+                         && (std::is_signed_v<T> || std::is_same_v<std::remove_cv_t<T>, int128_t>);
+
+static_assert(UnsignedIntegral<uint128_t> && SignedIntegral<int128_t>);
+
+template<typename T>
+concept Integral = UnsignedIntegral<T> || SignedIntegral<T>;
+
 // 小于等于 64 位的整型。
 template<typename T>
-concept Integer64 = std::is_integral_v<T> && !std::is_same_v<std::remove_cv_t<T>, bool>
-                    && (std::numeric_limits<T>::digits <= std::numeric_limits<uint64_t>::digits);
+concept Integer64 =
+    Integral<T> && std::numeric_limits<T>::digits <= std::numeric_limits<uint64_t>::digits;
 
-// 将有符号整数的绝对值转换为对应的无符号类型。
-template<std::integral T>
-[[nodiscard]] constexpr auto to_unsigned_abs(T x) -> std::make_unsigned_t<T> {
-    return x >= 0 ? static_cast<std::make_unsigned_t<T>>(x)
-                  : -static_cast<std::make_unsigned_t<T>>(x);
+template<typename T> struct make_unsigned {
+    using type = std::make_unsigned_t<T>;
+};
+
+template<> struct make_unsigned<int128_t> {
+    using type = uint128_t;
+};
+
+template<> struct make_unsigned<uint128_t> {
+    using type = uint128_t;
+};
+
+template<typename T> using make_unsigned_t = typename make_unsigned<std::remove_cv_t<T>>::type;
+
+// 将有符号整数的绝对值转换为对应的无符号类型，对无符号不起作用。
+template<Integral T> constexpr auto to_unsigned_abs(T x) -> make_unsigned_t<T> {
+    using U = make_unsigned_t<T>;
+    return x >= 0 ? static_cast<U>(x) : -static_cast<U>(x);
 }
 
+static_assert(to_unsigned_abs(int128_t(-1)) == uint128_t(1));
+
 template<typename T> constexpr auto fast_pow(T base, uint32_t exponent) -> T {
-    T res = 1;
+    T res(1);
     while (exponent) {
         if (exponent & 1)
             res *= base;

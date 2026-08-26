@@ -152,7 +152,7 @@ auto BigInt::to_dec_string_brute() const -> std::string {
 }
 
 auto BigInt::get_pow_of_ten(uint32_t exponent) -> BigInt {
-    static std::vector<BigInt>  pows_of_ten = {TEN};
+    static std::vector<BigInt>  pows_of_ten = {BigInt(TEN)};
     static std::mutex           mtx;
     std::lock_guard<std::mutex> lock(mtx);
 
@@ -628,7 +628,7 @@ auto BigInt::divmod(const BigInt& b, RoundMode mode, bool check) const
         throw std::domain_error("division by zero");
     }
     if (is_zero()) {
-        return {0, 0};
+        return {BigInt(0), BigInt(0)};
     }
     constexpr size_type PROTECT_PRECISION = 16;
 
@@ -1056,7 +1056,7 @@ auto BigFloat::reciprocal(size_type precision) const -> BigFloat {
     int64_t exponent = DIGIT_BITS * (static_cast<int64_t>(data_.size()) - 1 - point_pos_)
                        + std::bit_width(data_.back());
 
-    BigFloat b = *this >> exponent;
+    BigFloat b(*this >> exponent);
     b.remove_tail_zero();
     BigFloat  x(1 / b.to_double());
     size_type cur_precision = DOUBLE_MANTISSA_LEN / DIGIT_BITS;
@@ -1141,13 +1141,13 @@ void BigFloat::round(RoundMode mode, int64_t precision, RoundRelativeTo relative
 
 BigInt::BigInt(const BigFloat& x, RoundMode mode)
     : BigInt(x.is_zero() || x.point_pos_ > static_cast<int64_t>(x.data_.size())
-                 ? 0u
+                 ? BigInt(0)
                  : convert_from_BigFloat(mode, x.data_, x.is_neg_, x.point_pos_)) {
 }
 
 BigInt::BigInt(BigFloat&& x, RoundMode mode)
     : BigInt(x.is_zero() || x.point_pos_ > static_cast<int64_t>(x.data_.size())
-                 ? 0u
+                 ? BigInt(0)
                  : convert_from_BigFloat(
                        mode, std::move(x.data_), x.is_neg_, std::move(x).point_pos_)) {
     x.reset();
@@ -1159,7 +1159,7 @@ auto BigInt::convert_from_BigFloat(RoundMode mode, Digits data, bool is_neg, int
         data.insert(data.begin(), -point_pos, 0);
     } else if (point_pos > 0) {
         if (point_pos > static_cast<int64_t>(data.size())) {
-            return 0;
+            return BigInt(0);
         } else {
             _round(mode, data, is_neg, point_pos - 1);
         }
