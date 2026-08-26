@@ -1,6 +1,7 @@
 #include <bit>
 #include <cmath>
 #include <immintrin.h>
+#include <numbers>
 #include <ranges>
 #include <span>
 
@@ -132,7 +133,7 @@ template<bool rev> static void fft(std::span<double> v_re, std::span<double> v_i
             std::swap(nB_re, nD_re);
             std::swap(nB_im, nD_im);
             nA_re /= 4, nB_re /= 4, nC_re /= 4, nD_re /= 4;
-            nA_im /= 4, nD_im /= 4, nC_im /= 4, nD_im /= 4;
+            nA_im /= 4, nB_im /= 4, nC_im /= 4, nD_im /= 4;
         }
         v_re[i + 0] = nA_re, v_im[i + 0] = nA_im;
         v_re[i + 1] = nB_re, v_im[i + 1] = nB_im;
