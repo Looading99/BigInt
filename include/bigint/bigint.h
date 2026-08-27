@@ -531,6 +531,11 @@ public:
     // 求倒数，precision 为 0 时使用输入精度
     [[nodiscard]] auto reciprocal(std::size_t precision = 0) const -> BigFloat;
 
+    // reciprocal 的别名
+    [[nodiscard]] auto inv(std::size_t precision = 0) const -> BigFloat {
+        return reciprocal(precision);
+    }
+
     [[nodiscard]] constexpr auto operator+() const -> BigFloat { return *this; }
 
     [[nodiscard]] constexpr auto operator-() const -> BigFloat {

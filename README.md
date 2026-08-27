@@ -5,7 +5,7 @@
 ## 特性
 
 - **高精度整数 `BigInt`**：支持任意位长的整数四则运算、位运算、比较、字符串互转、快速幂、`get_pow_of_ten`、`divmod` 及多种舍入模式。
-- **高精度小数 `BigFloat`**：支持从 `BigInt` / 整型 / 字符串（不支持解析字符串中的小数点）构造、与 `double` 互转、转换成字符串、按精度舍入、求倒数（`reciprocal`）。
+- **高精度小数 `BigFloat`**：支持从 `BigInt` / 整型 / 字符串（不支持解析字符串中的小数点）构造、与 `double` 互转、转换成字符串、按精度舍入、求倒数（`reciprocal`，别名`inv`）。
 - **多算法快速乘法**：按输入规模自动分发 `brute → fft → ntt → ssa`；FFT 采用 DIF/DIT 基-2 混合 radix 变换与动态 digit_bits（AVX2+FMA），NTT 为三模数 + Montgomery 模乘，SSA 处理超大规模。
 - **多线程**：`init_thread_pool` 可指定工作线程数，NTT 大数乘法自动并行；本库线程安全，可被多个线程并发使用。
 - **易于集成**：CMake 静态库目标 `bigint::bigint`，支持 `find_package` 安装导出。
@@ -135,10 +135,10 @@ int main() {
 
     // 高精度小数
     BigFloat x(3.141592653589793);
-    BigFloat y = x * (x + x);              // 加法、乘法
-    BigFloat inv = y.reciprocal(10);       // 求倒数，指定 10 个 64 位 limb 的内部精度
+    BigFloat y = x * (x + x);           // 加法、乘法
+    BigFloat y_inv = y.reciprocal(10);  // （或使用y.inv）求倒数，指定 10 个 64 位 limb 的内部精度
     y.round(bigint::RoundMode::RoundHalfUp, 50, bigint::RoundRelativeTo::Point); // 按精度舍入
-    double d = y.to_double();              // 转回 double
+    double d = y.to_double();           // 转回 double
     std::cout << bigint::print(y, 10, true) << '\n'  // 以十进制小数格式输出 10 位小数
     // 也可使用 y.to_string()，y.print()，std::cout << y 等
 
@@ -175,7 +175,7 @@ int main() {
 ### `bigint::BigFloat` — 高精度小数
 
 - 构造：`BigInt`（移动/拷贝）、整型、字符串（可带 `offset`）、`double`（除拷贝/移动外均为 `explicit`）
-- 方法：`sign()`、`to_double()`、`to_string(dec_digits)`、`print(ostream, dec_digits, direct)`、`reciprocal(precision)`、`round(mode, precision, relative)`、`get_data()`、`get_point_pos()`等
+- 方法：`sign()`、`to_double()`、`to_string(dec_digits)`、`print(ostream, dec_digits, direct)`、`reciprocal(precision)`（别名 `inv(precision)`）、`round(mode, precision, relative)`、`get_data()`、`get_point_pos()`等
 - 运算：`+ -`、乘法`*`和`mul(a, b, precision)`（`*`无精度限制，`mul`需传入目标精度，精度单位为 64 位 limb）、`<< >> <<= >>=`（二进制移位，等价于乘/除以 2 的幂，可传入负数）、一元 `+ -`
 - 舍入模式 `RoundMode`：`Truncate` / `Floor` / `Ceil` / `RoundHalfUp`（别名 `Round`）
 - 精度参照 `RoundRelativeTo`：`Significant`（相对最高位，可理解为: `114.514, 4 -> 114.5`）/ `Point`（相对小数点，可理解为：`114.514, 1 -> 110`/`114.514, -1 -> 114.5`）
