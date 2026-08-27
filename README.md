@@ -6,7 +6,7 @@
 
 - **高精度整数 `BigInt`**：支持任意位长的整数四则运算、位运算、比较、字符串互转、快速幂、`get_pow_of_ten`、`divmod` 及多种舍入模式。
 - **高精度小数 `BigFloat`**：支持从 `BigInt` / 整型 / 字符串（不支持解析字符串中的小数点）构造、与 `double` 互转、转换成字符串、按精度舍入、求倒数（`reciprocal`）。
-- **多算法快速乘法**：按输入规模自动分发 `brute → fft → ntt → ssa`；FFT 采用基-4 变换与动态 digit_bits（AVX2+FMA），NTT 为三模数 + Montgomery 模乘，SSA 处理超大规模。
+- **多算法快速乘法**：按输入规模自动分发 `brute → fft → ntt → ssa`；FFT 采用 DIF/DIT 基-2 混合 radix 变换与动态 digit_bits（AVX2+FMA），NTT 为三模数 + Montgomery 模乘，SSA 处理超大规模。
 - **多线程**：`init_thread_pool` 可指定工作线程数，NTT 大数乘法自动并行；本库线程安全，可被多个线程并发使用。
 - **易于集成**：CMake 静态库目标 `bigint::bigint`，支持 `find_package` 安装导出。
 
@@ -22,7 +22,7 @@ include/bigint/
 src/
     bigint.cpp           # BigInt / BigFloat 实现
     mul/
-        fft.cpp              # FFT 乘法（基-4、动态 digit_bits、AVX2+FMA）
+        fft.cpp              # FFT 乘法（DIF/DIT 基-2 混合 radix、动态 digit_bits、AVX2+FMA）
         ntt_multithread.cpp  # 多线程 NTT 乘法
         ssa.cpp              # SSA 乘法
 tests/
@@ -194,7 +194,7 @@ int main() {
 - **表示方式**：以 `2^28` 为基数（`DIGIT_BITS = 28`）、小端序 `uint32_t` 数组存储，无前导零。
 - **乘法**：按输入规模自动分发 `brute → fft → ntt → ssa`（统一入口 `bigint::mul::mul_digits`）：
   - **朴素**：小规模（≤ ~16K bit）
-  - **FFT**：基-4 变换 + 动态 digit_bits（默认下限 10，覆盖约 10.49M bit），AVX2+FMA 向量化（单线程）
+  - **FFT**：DIF/DIT 基-2 混合 radix 变换（长度可为任意 2 的幂）+ 动态 digit_bits（默认下限 5，覆盖约 84M bit），AVX2+FMA 向量化（单线程）
   - **NTT**：三模数 + Montgomery 模乘 + SIMD，多线程，覆盖至约 33M bit
   - **SSA**：超过 NTT 容量的超大规模
 - **理论规模上限**：FFT 与 NTT 各有容量上限；SSA 无固定上限（仅受内存与时间约束）。
@@ -203,7 +203,7 @@ int main() {
 ## 已知限制
 
 - NTT 线程池的线程数超过 CPU 并行数（排除 LPE 核心）时性能下降严重，建议根据具体 CPU 情况手动指定线程数。
-- FFT 只能进行基-4变换且需要逆序置换，性能浪费严重；暂时不支持多线程。
+- FFT 目前为单线程（仅 NTT 支持多线程）。
 - MSVC 编译器不支持（缺 `__uint128_t`）；建议使用 GCC / Clang，或 clang 的 Windows MSVC target。
 - `BigFloat` 不支持比较运算，建议作差后判断符号。
 - 部分功能依赖 AVX2 与 FMA，需在支持的 CPU 上编译运行。
