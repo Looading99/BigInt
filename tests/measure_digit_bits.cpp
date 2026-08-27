@@ -40,7 +40,7 @@ static void normalize(Vec64& v) {
 }
 
 // 28 位数字 → 64 位块（小端）
-static Vec64 pack_digits_to_limbs(const Digits& d) {
+static auto pack_digits_to_limbs(const Digits& d) -> Vec64 {
     Vec64             res;
     bigint::uint128_t tmp      = 0;
     size_type         tmp_bits = 0;
@@ -62,7 +62,7 @@ static Vec64 pack_digits_to_limbs(const Digits& d) {
 }
 
 // 2^(B*m)-1 的 28 位数字表示（小端）：m 个 B 位数字全部取 2^B-1（最坏情况）
-static Digits ones_digits28(int B, size_type m) {
+static auto ones_digits28(int B, size_type m) -> Digits {
     const size_type nbits = static_cast<size_type>(B) * m;
     const size_type nd    = (nbits + DIGIT_BITS - 1) / DIGIT_BITS;
     Digits          d(nd, DIGIT_MASK);
@@ -109,7 +109,7 @@ static auto max_passing_m(int B) -> size_type {
 }
 
 static void run_measure() {
-    std::cout << "MAX_FFT_LEN=" << MAX_FFT_LEN << " (layer=" << (std::countr_zero(MAX_FFT_LEN) / 2)
+    std::cout << "MAX_FFT_LEN=" << MAX_FFT_LEN << " (layer=" << std::countr_zero(MAX_FFT_LEN)
               << ")\n";
     std::array<size_type, MAX_DIGIT_BITS + 1> max_total_bits{};
     std::cout << "--- per digit_bits max total bits (worst case) ---\n";
@@ -120,8 +120,8 @@ static void run_measure() {
         std::cout << "B=" << B << "  m_max=" << m_max << "  max_total_bits=" << t_max << "\n";
     }
     std::cout << "--- copy-paste table for mul.h ---\n";
-    std::cout << "constexpr std::array<size_type, " << MAX_DIGIT_BITS + 1
-              << "> MAX_TOTAL_BITS_FOR_DIGIT_BITS = {\n";
+    std::cout << "constexpr std::array<size_type, MAX_DIGIT_BITS + 1> "
+                 "MAX_TOTAL_BITS_FOR_DIGIT_BITS = {\n";
     for (int i = 0; i <= MAX_DIGIT_BITS; ++i) {
         std::cout << "    " << max_total_bits[i];
         if (i != MAX_DIGIT_BITS) {
@@ -202,7 +202,7 @@ static void run_regress() {
     std::cout << "regress: cases=" << cases << " fails=" << fails << "\n";
 }
 
-int main(int argc, char** argv) {
+auto main(int argc, char** argv) -> int {
     const std::span<char*> args(argv, static_cast<size_type>(argc));
     const std::string      mode       = args.size() > 1 ? std::string(args[1]) : "";
     const bool             do_measure = mode.empty() || mode == "measure";
