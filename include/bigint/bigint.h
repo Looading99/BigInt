@@ -367,10 +367,14 @@ private:
         : is_neg_(is_neg) {
         if (value == 0) {
             data_.push_back(0);
+        } else if constexpr (sizeof(value) <= sizeof(uint64_t)) {
+            // 64 位及以下直接存放，无需循环
+            data_.push_back(static_cast<uint64_t>(value));
         } else {
-            while (value) {
-                data_.push_back(static_cast<uint32_t>(value) & DIGIT_MASK);
-                value >>= DIGIT_BITS;
+            uint128_t v = value;  // uint128_t 累加器，避免 uint64_t 移位 64 的 UB
+            while (v) {
+                data_.push_back(static_cast<uint64_t>(v));
+                v >>= 64;
             }
         }
     }
@@ -388,15 +392,11 @@ private:
 
     void unsigned_self_inc_or_dec(bool is_dec);
 
-    auto trim_all(bool is_borrow) -> uint32_t;
-
     void inplace_add_or_sub(const BigInt& b, bool is_sub);
 
     void inplace_add_or_sub(uint64_t b, bool is_sub);
 
     void unsigned_inplace_mul(uint64_t b);
-
-    template<typename C, typename T> void unsigned_inplace_mul(T b);
 
     static void shift_left(Digits& v, uint64_t offset);
 
@@ -653,12 +653,7 @@ private:
 
     static auto add_or_sub(const BigFloat& a, const BigFloat& b, bool is_sub) -> BigFloat;
 
-    static auto ntt_mul(const BigFloat& a, const BigFloat& b, std::size_t output_precision = 0)
-        -> BigFloat;
-
     void unsigned_inplace_mul(uint64_t b);
-
-    template<typename C, typename T> void unsigned_inplace_mul(T b);
 };
 
 template<class T>

@@ -8,6 +8,7 @@
 // 说明：fft::mul 的 digit_bits 参数可覆盖自动选择，故单次编译即可测出全部结果，
 // 无需宏定义多次编译。最坏情况输入为“每 B 位数字都取 2^B-1”，卷积系数取到
 // 理论最大值 m*(2^B-1)^2，据此得到保守可保证精度的边界；另附随机输入回归。
+// 内部表示为基数 2^64 的 limb 数组，最坏情况即前 nbits 位全 1。
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -24,12 +25,11 @@
 
 
 using bigint::DIGIT_BITS;
-using bigint::DIGIT_MASK;
+using bigint::Digits;
 using bigint::mul::fft::MAX_DIGIT_BITS;
 using bigint::mul::fft::MAX_FFT_LEN;
 using bigint::mul::fft::MIN_DIGIT_BITS;
-using Digits = std::vector<uint32_t>;
-using Vec64  = std::vector<uint64_t>;
+using Vec64 = std::vector<uint64_t>;
 
 // 去掉尾部 0，统一长度后再比较
 static void normalize(Vec64& v) {
@@ -38,46 +38,23 @@ static void normalize(Vec64& v) {
     }
 }
 
-// 28 位数字 → 64 位块（小端）
-static auto pack_digits_to_limbs(const Digits& d) -> Vec64 {
-    Vec64             res;
-    bigint::uint128_t tmp      = 0;
-    std::size_t       tmp_bits = 0;
-    std::size_t       i = 0, n = d.size();
-    while (i < n) {
-        while (tmp_bits < 64 && i < n) {
-            tmp |= static_cast<bigint::uint128_t>(d[i]) << tmp_bits;
-            tmp_bits += DIGIT_BITS;
-            ++i;
-        }
-        res.push_back(static_cast<uint64_t>(tmp));
-        tmp >>= 64;
-        tmp_bits -= 64;
-    }
-    if (tmp) {
-        res.push_back(static_cast<uint64_t>(tmp));
-    }
-    return res;
-}
-
-// 2^(B*m)-1 的 28 位数字表示（小端）：m 个 B 位数字全部取 2^B-1（最坏情况）
-static auto ones_digits28(int B, std::size_t m) -> Digits {
-    const std::size_t nbits = static_cast<std::size_t>(B) * m;
-    const std::size_t nd    = (nbits + DIGIT_BITS - 1) / DIGIT_BITS;
-    Digits            d(nd, DIGIT_MASK);
+// 2^(B*m)-1 的 64 位 limb 表示（小端）：前 B*m 位全部取 1（最坏情况）
+static auto ones_limbs(int B, std::size_t m) -> Vec64 {
+    const auto nbits = static_cast<std::size_t>(B) * m;
+    const std::size_t nd = (nbits + DIGIT_BITS - 1) / DIGIT_BITS;
+    Vec64             d(nd, UINT64_MAX);
     const std::size_t rem = nbits % DIGIT_BITS;
     if (rem != 0) {
-        d.back() = (1u << rem) - 1;
+        d.back() = (uint64_t(1) << rem) - 1;
     }
     return d;
 }
 
 // 最坏情况：两个 operand 各 m 个 2^B-1 数字相乘，强制 FFT(digit_bits=B) 与 NTT 参考比对
 static auto worst_case_ok(int B, std::size_t m) -> bool {
-    const Digits a28   = ones_digits28(B, m);
-    const Vec64  a64   = pack_digits_to_limbs(a28);
-    Vec64        r_fft = bigint::mul::fft::mul(a64, a64, B);
-    Vec64        r_ref = bigint::mul::ntt::mul(a64, a64);  // NTT 参考（64 位块接口）
+    const Vec64 a64   = ones_limbs(B, m);
+    Vec64       r_fft = bigint::mul::fft::mul(a64, a64, B);
+    Vec64       r_ref = bigint::mul::ntt::mul(a64, a64);  // NTT 参考（64 位块接口）
     normalize(r_fft);
     normalize(r_ref);
     return r_fft == r_ref;
@@ -142,14 +119,13 @@ static void run_regress() {
     auto rand_digits = [&](std::size_t n) {
         Digits d(n);
         for (auto& x : d) {
-            x = static_cast<uint32_t>(rng() & DIGIT_MASK);
+            x = rng();
         }
         return d;
     };
     auto check = [&](const Digits& a, const Digits& b) {
-        const Vec64 a64 = pack_digits_to_limbs(a), b64 = pack_digits_to_limbs(b);
-        Vec64       r_fft = bigint::mul::fft::mul(a64, b64);  // 自动选择 digit_bits
-        Vec64       r_ntt = bigint::mul::ntt::mul(a64, b64);  // NTT 参考
+        Vec64 r_fft = bigint::mul::fft::mul(a, b);  // 自动选择 digit_bits
+        Vec64 r_ntt = bigint::mul::ntt::mul(a, b);  // NTT 参考
         normalize(r_fft);
         normalize(r_ntt);
         ++cases;
@@ -169,13 +145,12 @@ static void run_regress() {
     for (std::size_t n : {100ull, 1000ull, 10000ull, 40000ull}) {
         for (int rep = 0; rep < 3; ++rep) {
             Digits a = rand_digits(n), b = rand_digits(n);
-            Digits r_mul       = bigint::mul::mul_digits(a, b);
-            Vec64  r_mul_limbs = pack_digits_to_limbs(r_mul);
-            Vec64  r_ntt = bigint::mul::ntt::mul(pack_digits_to_limbs(a), pack_digits_to_limbs(b));
-            normalize(r_mul_limbs);
+            Digits r_mul = bigint::mul::mul_digits(a, b);
+            Vec64  r_ntt = bigint::mul::ntt::mul(a, b);
+            normalize(r_mul);
             normalize(r_ntt);
             ++cases;
-            if (r_mul_limbs != r_ntt) {
+            if (r_mul != r_ntt) {
                 ++fails;
                 std::cout << "MUL_DIGITS MISMATCH n=" << n << "\n";
             }
@@ -186,9 +161,8 @@ static void run_regress() {
         const std::size_t n = 64;
         for (int rep = 0; rep < 4; ++rep) {
             const Digits a = rand_digits(n), b = rand_digits(n);
-            const Vec64  a64 = pack_digits_to_limbs(a), b64 = pack_digits_to_limbs(b);
-            Vec64        r_fft = bigint::mul::fft::mul(a64, b64, B);
-            Vec64        r_ntt = bigint::mul::ntt::mul(a64, b64);  // NTT 参考
+            Vec64        r_fft = bigint::mul::fft::mul(a, b, B);
+            Vec64        r_ntt = bigint::mul::ntt::mul(a, b);  // NTT 参考
             normalize(r_fft);
             normalize(r_ntt);
             ++cases;

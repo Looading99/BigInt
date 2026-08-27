@@ -30,7 +30,7 @@ constexpr uint32_t MAX_TRANSFORM_LEN = 1u << MAX_TRANSFORM_LEN_EXP;
 constexpr auto inv_G = [] {
     std::array<uint32_t, NUM_PRIMES> res{};
     for (uint8_t I = 0; I < NUM_PRIMES; ++I) {
-        res[I] = modinv(G[I], P[I]);
+        res[I] = detail::modinv(G[I], P[I]);
     }
     return res;
 }();
@@ -45,7 +45,7 @@ constexpr uint64_t R = 1ull << w;
 constexpr auto neg_inv_P = [] {
     std::array<uint32_t, NUM_PRIMES> res{};
     for (uint8_t I = 0; I < NUM_PRIMES; ++I) {
-        int64_t inv_P = modinv(P[I], R);
+        int64_t inv_P = detail::modinv(P[I], R);
         res[I]        = R - inv_P;
     }
     return res;
@@ -65,7 +65,7 @@ constexpr std::array<uint32_t, 3> vec_one = {R % P[0], R % P[1], R % P[2]};
 
 constexpr auto mul(uint8_t I, uint32_t a, uint32_t b) -> uint32_t {
     uint64_t t  = uint64_t(a) * b;
-    uint32_t u  = static_cast<uint32_t>(t) * neg_inv_P[I];
+    auto     u  = static_cast<uint32_t>(t) * neg_inv_P[I];
     uint64_t t2 = t + static_cast<uint64_t>(u) * P[I];
     uint32_t r  = t2 >> w;
     return r < P[I] ? r : r - P[I];
@@ -211,7 +211,7 @@ constexpr auto steps = [] {
 constexpr auto inv_pow_of_two = [] {
     std::array<std::array<uint32_t, NUM_PRIMES>, MAX_TRANSFORM_LEN_EXP> arr{};
     for (uint8_t I = 0; I < NUM_PRIMES; ++I) {
-        arr[0][I] = modinv(2, P[I]);
+        arr[0][I] = detail::modinv(2, P[I]);
         for (std::size_t i = 1; i < MAX_TRANSFORM_LEN_EXP; ++i) {
             arr[i][I] = static_cast<uint64_t>(arr[i - 1][I]) * arr[0][I] % P[I];
         }
@@ -227,16 +227,16 @@ constexpr auto is_invalid_ntt_len(std::size_t n) -> bool {
 }
 
 constexpr auto garner_merge(uint32_t c0, uint32_t c1, uint32_t c2) -> uint128_t {
-    constexpr uint32_t inv_P0_mod_P1 = modinv(P[0], P[1]);
-    constexpr uint32_t inv_P0_mod_P2 = modinv(P[0], P[2]);
-    constexpr uint32_t inv_P1_mod_P2 = modinv(P[1], P[2]);
+    constexpr uint32_t inv_P0_mod_P1 = detail::modinv(P[0], P[1]);
+    constexpr uint32_t inv_P0_mod_P2 = detail::modinv(P[0], P[2]);
+    constexpr uint32_t inv_P1_mod_P2 = detail::modinv(P[1], P[2]);
 
     uint32_t v0 = c0;
 
-    uint32_t v1 = static_cast<uint64_t>(sub_mod(c1, v0, P[1])) * inv_P0_mod_P1 % P[1];
+    uint32_t v1 = static_cast<uint64_t>(detail::sub_mod(c1, v0, P[1])) * inv_P0_mod_P1 % P[1];
 
-    uint32_t v2 = static_cast<uint64_t>(sub_mod(c2, v0, P[2])) * inv_P0_mod_P2 % P[2];
-    v2          = static_cast<uint64_t>(sub_mod(v2, v1, P[2])) * inv_P1_mod_P2 % P[2];
+    uint32_t v2 = static_cast<uint64_t>(detail::sub_mod(c2, v0, P[2])) * inv_P0_mod_P2 % P[2];
+    v2          = static_cast<uint64_t>(detail::sub_mod(v2, v1, P[2])) * inv_P1_mod_P2 % P[2];
 
     uint128_t x = static_cast<uint64_t>(P[0]) * P[1];
     x *= v2;
@@ -284,25 +284,6 @@ inline void multi_bit_swap(std::span<uint32_t> v) {
             k >>= 1;
         }
         j += k;
-    }
-}
-
-// 把数组每个元素重复 k 次
-inline void copy_repeat(const Digits& v_in, std::size_t offset, std::size_t k, Digits& v_out) {
-    v_out.clear();
-    std::size_t new_size = (v_in.size() - offset) * k;
-    v_out.reserve(new_size);
-    if (new_size == 0) {
-        return;
-    } else if (k == 1) {
-        v_out.insert(v_out.begin(), v_in.begin() + static_cast<int64_t>(offset), v_in.end());
-        return;
-    }
-    for (std::size_t i = offset; i < v_in.size(); ++i) {
-        uint32_t value = v_in[i];
-        for (std::size_t rep = 0; rep < k; ++rep) {
-            v_out.push_back(value);
-        }
     }
 }
 

@@ -492,8 +492,8 @@ auto mul(std::span<const uint64_t> A, std::span<const uint64_t> B, int digit_bit
 
     std::vector<double, AlignedAllocator<double>> v_re, v_im;
     std::size_t                                   fft_new_size =
-        std::bit_ceil(ceil_div<std::size_t>(A.size() * 64, digit_bits)
-                      + ceil_div<std::size_t>(B.size() * 64, digit_bits) - 1);
+        std::bit_ceil(detail::ceil_div<std::size_t>(A.size() * 64, digit_bits)
+                      + detail::ceil_div<std::size_t>(B.size() * 64, digit_bits) - 1);
     v_re.reserve(fft_new_size);
     vec64_to_double(A, v_re, digit_bits);
     v_re.resize(fft_new_size);
@@ -544,7 +544,7 @@ auto mul(std::span<const uint64_t> A, std::span<const uint64_t> B, int digit_bit
             digit >>= 64;
         } while (digit);
     } else {
-        utils::remove_leading_zero(res);
+        detail::remove_leading_zero(res);
     }
 
     return res;

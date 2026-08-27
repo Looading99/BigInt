@@ -4,12 +4,14 @@
 #    error "This library requires __uint128_t."
 #endif
 
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <span>
 #include <tuple>
 #include <type_traits>
 #include <vector>
@@ -17,13 +19,11 @@
 
 namespace bigint {
 
-// 内部容器
-using Digits = std::vector<uint32_t>;
+// 内部容器（基数 2^64 的小端序 limb 数组）
+using Digits = std::vector<uint64_t>;
 
-// 基数位宽，必须保证基数小于所有模数；
-// print_hex 依赖此数是 4 的倍数
-constexpr uint32_t DIGIT_BITS = 28;
-constexpr uint32_t DIGIT_MASK = (1u << DIGIT_BITS) - 1u;
+// 基数位宽；print_hex 依赖此数是 4 的倍数
+constexpr uint32_t DIGIT_BITS = 64;
 
 constexpr int TEN                  = 10;
 constexpr int DOUBLE_MANTISSA_LEN  = 52;
@@ -109,9 +109,12 @@ constexpr auto fast_pow(uint32_t base, uint32_t exponent, uint32_t mod) -> uint3
     return res;
 }
 
-constexpr auto floor_log(uint64_t base, uint64_t x) -> std::size_t {
-    std::size_t n     = 0;
-    uint64_t    power = 1;
+// 与表示无关的通用工具（原 bigint::mul::utils 迁入，供全库复用）
+namespace detail {
+
+constexpr auto floor_log(uint64_t base, uint64_t x) -> uint64_t {
+    uint64_t n     = 0;
+    uint64_t power = 1;
     while (power <= x / base) {
         power *= base;
         ++n;
@@ -167,5 +170,62 @@ template<std::unsigned_integral T> constexpr auto sub_overflow(T a, T b, T& res)
     res = a - b;
     return res > a;
 }
+
+// 计算 C = A + B，A 和 B 长度小于 C 时自动补 0，返回最高位是否进位，C 可以是 A、B 之一
+inline auto add(std::span<const uint64_t> A, std::span<const uint64_t> B, std::span<uint64_t> C)
+    -> bool {
+    bool carry = false;
+    for (std::size_t i = 0; i < C.size(); ++i) {
+        uint64_t a = i < A.size() ? A[i] : 0, b = i < B.size() ? B[i] : 0;
+        if (a == uint64_t(-1) && carry) {
+            C[i] = b;
+        } else {
+            carry = add_overflow(a + carry, b, C[i]);
+        }
+    }
+    return carry;
+}
+
+// 计算 C = A - B，A 和 B 长度小于 C 时自动补 0，返回最高位是否借位，C 可以是 A、B 之一
+inline auto sub(std::span<const uint64_t> A, std::span<const uint64_t> B, std::span<uint64_t> C)
+    -> bool {
+    bool borrow = false;
+    for (std::size_t i = 0; i < C.size(); ++i) {
+        uint64_t a = i < A.size() ? A[i] : 0, b = i < B.size() ? B[i] : 0;
+        if (a == 0 && borrow) {
+            C[i] = uint64_t(-1) - b;
+        } else {
+            borrow = sub_overflow(a - borrow, b, C[i]);
+        }
+    }
+    return borrow;
+}
+
+// 计算 A = A + 1，返回是否进位
+inline auto add1(std::span<uint64_t> A) -> bool {
+    std::size_t i = 0;
+    for (; i < A.size(); ++i) {
+        if (A[i] != uint64_t(-1)) {
+            break;
+        }
+    }
+    if (i > 0) {
+        std::fill(A.begin(), A.begin() + static_cast<int64_t>(i), 0);
+    }
+    if (i == A.size()) {
+        return true;
+    } else {
+        ++A[i];
+        return false;
+    }
+}
+
+template<class T> inline void remove_leading_zero(T& v) {
+    while (v.size() > 0 && v.back() == 0) {
+        v.pop_back();
+    }
+}
+
+}  // namespace detail
 
 }  // namespace bigint

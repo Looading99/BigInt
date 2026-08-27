@@ -136,7 +136,7 @@ int main() {
     // 高精度小数
     BigFloat x(3.141592653589793);
     BigFloat y = x * (x + x);              // 加法、乘法
-    BigFloat inv = y.reciprocal(10);       // 求倒数，指定 10 位内部数字的精度
+    BigFloat inv = y.reciprocal(10);       // 求倒数，指定 10 个 64 位 limb 的内部精度
     y.round(bigint::RoundMode::RoundHalfUp, 50, bigint::RoundRelativeTo::Point); // 按精度舍入
     double d = y.to_double();              // 转回 double
     std::cout << bigint::print(y, 10, true) << '\n'  // 以十进制小数格式输出 10 位小数
@@ -176,7 +176,7 @@ int main() {
 
 - 构造：`BigInt`（移动/拷贝）、整型、字符串（可带 `offset`）、`double`（除拷贝/移动外均为 `explicit`）
 - 方法：`sign()`、`to_double()`、`to_string(dec_digits)`、`print(ostream, dec_digits, direct)`、`reciprocal(precision)`、`round(mode, precision, relative)`、`get_data()`、`get_point_pos()`等
-- 运算：`+ -`、乘法`*`和`mul(a, b, precision)`（`*`无精度限制，`mul`需传入目标精度）、`<< >> <<= >>=`（二进制移位，等价于乘/除以 2 的幂，可传入负数）、一元 `+ -`
+- 运算：`+ -`、乘法`*`和`mul(a, b, precision)`（`*`无精度限制，`mul`需传入目标精度，精度单位为 64 位 limb）、`<< >> <<= >>=`（二进制移位，等价于乘/除以 2 的幂，可传入负数）、一元 `+ -`
 - 舍入模式 `RoundMode`：`Truncate` / `Floor` / `Ceil` / `RoundHalfUp`（别名 `Round`）
 - 精度参照 `RoundRelativeTo`：`Significant`（相对最高位，可理解为: `114.514, 4 -> 114.5`）/ `Point`（相对小数点，可理解为：`114.514, 1 -> 110`/`114.514, -1 -> 114.5`）
 - 说明：不支持比较，建议作差后判断符号；不支持 `-0.0`
@@ -191,8 +191,8 @@ int main() {
 
 ## 实现说明
 
-- **表示方式**：以 `2^28` 为基数（`DIGIT_BITS = 28`）、小端序 `uint32_t` 数组存储，无前导零。
-- **乘法**：按输入规模自动分发 `brute → fft → ntt → ssa`（统一入口 `bigint::mul::mul_digits`）：
+- **表示方式**：以 `2^64` 为基数（`DIGIT_BITS = 64`）、小端序 `uint64_t` 数组存储，无前导零；乘法等内部实现与存储表示统一为 64 位块，无任何基数转换。
+- **乘法**：按输入规模自动分发 `brute → fft → ntt → ssa`（统一入口 `bigint::mul::mul_digits`，输入输出直接为 64 位 limb）：
   - **朴素**：小规模（≤ ~16K bit）
   - **FFT**：DIF/DIT 基-2 混合 radix 变换（长度可为任意 2 的幂）+ 动态 digit_bits（默认下限 5，覆盖约 84M bit），AVX2+FMA 向量化（单线程）
   - **NTT**：三模数 + Montgomery 模乘 + SIMD，多线程，覆盖至约 33M bit

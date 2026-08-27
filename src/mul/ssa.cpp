@@ -18,7 +18,7 @@ static inline void mod_add(std::span<const uint64_t> A, std::span<const uint64_t
     std::size_t w = m / 64;
     if (!(C.size() >= w + 1 && m % 64 == 0))
         unreachable();
-    utils::add(A, B, C.size() == w + 1 ? C : C.subspan(0, w + 1));
+    detail::add(A, B, C.size() == w + 1 ? C : C.subspan(0, w + 1));
     if (C[w]) {  // C >= 2^m
         std::size_t i = 0;
         for (; i < w; ++i) {
@@ -42,9 +42,9 @@ static inline void mod_sub(std::span<const uint64_t> A, std::span<const uint64_t
     std::size_t w = m / 64;
     if (!(C.size() >= w + 1 && m % 64 == 0))
         unreachable();
-    bool borrow = utils::sub(A, B, C.size() == w + 1 ? C : C.subspan(0, w + 1));
+    bool borrow = detail::sub(A, B, C.size() == w + 1 ? C : C.subspan(0, w + 1));
     if (borrow) {
-        utils::add1(C);
+        detail::add1(C);
         ++C[w];
     }
 }
@@ -77,9 +77,9 @@ static void mod_neg(std::span<uint64_t> A, std::size_t m) {
     for (; i < w; ++i) {
         A[i] = uint64_t(-1) - A[i];
     }
-    bool carry = add_overflow<uint64_t>(A[0], 2, A[0]);
+    bool carry = detail::add_overflow<uint64_t>(A[0], 2, A[0]);
     if (carry) {
-        utils::add1(A.subspan(1));
+        detail::add1(A.subspan(1));
     }
 }
 
@@ -92,7 +92,7 @@ static void mod(std::span<uint64_t> A, std::size_t m) {
         return;
     }
     // 将 A 每 w 个数分割成 k 块
-    auto k = ceil_div<std::size_t>(A.size(), w);
+    auto k = detail::ceil_div<std::size_t>(A.size(), w);
     // A mod = A_0 - A_1 + A_2 - A_3 + ...。
     // 迭代 R = (A_i - R) mod (2^m+1) for i from 1 to k-1，初始值为 A_0
     // R 有 w + 1 位，注意 i = 1 时 R 最高位与 A_1 重叠，读取时跳过即可
@@ -373,7 +373,7 @@ static void mod_mul(std::span<const uint64_t> A, std::span<const uint64_t> B, st
             mod_neg(a, N);
         }
         auto target = (is_neg ? acc_neg : acc_pos).subspan(i * k, n + 1);
-        utils::add(a, target, target);
+        detail::add(a, target, target);
     }
     mod(acc_pos, m);
     mod(acc_neg, m);
@@ -396,7 +396,7 @@ auto mul(std::span<const uint64_t> A, std::span<const uint64_t> B) -> std::vecto
 
     std::vector<uint64_t> res(m / 64 + 1);
     mod_mul(A, B, res, m, buffer);
-    utils::remove_leading_zero(res);
+    detail::remove_leading_zero(res);
     return res;
 }
 

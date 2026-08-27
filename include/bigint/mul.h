@@ -14,67 +14,6 @@
 namespace bigint::mul {
 
 
-// 与乘法实现有关的辅助函数，暂存在此，将来可能迁移至别处。
-namespace utils {
-
-// 计算 C = A + B，A 和 B 长度小于 C 时自动补 0，返回最高位是否进位，C 可以是 A、B 之一
-inline auto add(std::span<const uint64_t> A, std::span<const uint64_t> B, std::span<uint64_t> C)
-    -> bool {
-    bool carry = false;
-    for (std::size_t i = 0; i < C.size(); ++i) {
-        uint64_t a = i < A.size() ? A[i] : 0, b = i < B.size() ? B[i] : 0;
-        if (a == uint64_t(-1) && carry) {
-            C[i] = b;
-        } else {
-            carry = add_overflow(a + carry, b, C[i]);
-        }
-    }
-    return carry;
-}
-
-// 计算 C = A - B，A 和 B 长度小于 C 时自动补 0，返回最高位是否借位，C 可以是 A、B 之一
-inline auto sub(std::span<const uint64_t> A, std::span<const uint64_t> B, std::span<uint64_t> C)
-    -> bool {
-    bool borrow = false;
-    for (std::size_t i = 0; i < C.size(); ++i) {
-        uint64_t a = i < A.size() ? A[i] : 0, b = i < B.size() ? B[i] : 0;
-        if (a == 0 && borrow) {
-            C[i] = uint64_t(-1) - b;
-        } else {
-            borrow = sub_overflow(a - borrow, b, C[i]);
-        }
-    }
-    return borrow;
-}
-
-// 计算 A = A + 1，返回是否进位
-inline auto add1(std::span<uint64_t> A) -> bool {
-    std::size_t i = 0;
-    for (; i < A.size(); ++i) {
-        if (A[i] != uint64_t(-1)) {
-            break;
-        }
-    }
-    if (i > 0) {
-        std::fill(A.begin(), A.begin() + static_cast<int64_t>(i), 0);
-    }
-    if (i == A.size()) {
-        return true;
-    } else {
-        ++A[i];
-        return false;
-    }
-}
-
-template<class T> inline void remove_leading_zero(T& v) {
-    while (v.size() > 0 && v.back() == 0) {
-        v.pop_back();
-    }
-}
-
-}  // namespace utils
-
-
 namespace brute {
 
 constexpr std::size_t MAX_TOTAL_BITS = 2 * 128 * 64;
@@ -87,17 +26,17 @@ inline auto mul(std::span<const uint64_t> A, std::span<const uint64_t> B) -> std
         uint64_t    carry = 0;
         std::size_t j     = 0;
         for (; j < m; ++j) {
-            uint128_t t = static_cast<uint128_t>(A[i]) * B[j] + res[i + j] + carry;
-            res[i + j]  = t;
-            carry       = t >> 64;
+            auto t = static_cast<uint128_t>(A[i]) * B[j] + res[i + j] + carry;
+            res[i + j] = t;
+            carry      = t >> 64;
         }
         for (; carry; ++j) {
-            uint128_t t = static_cast<uint128_t>(res[i + j]) + carry;
-            res[i + j]  = t;
-            carry       = t >> 64;
+            auto t = static_cast<uint128_t>(res[i + j]) + carry;
+            res[i + j] = t;
+            carry      = t >> 64;
         }
     }
-    utils::remove_leading_zero(res);
+    detail::remove_leading_zero(res);
     return res;
 }
 
@@ -213,6 +152,7 @@ inline auto _mul(std::span<const uint64_t> A, std::span<const uint64_t> B)
 }
 
 // 将两个数组（按照 output_precision ）相乘。必须保证输入数组非全0。
+// 内部表示与乘法分发均为 64 位 limb，无任何打包/拆包转换。
 inline auto mul_digits(const Digits& a, const Digits& b, std::size_t output_precision = 0,
     int64_t* p_result_point_pos = nullptr) -> Digits {
     bool a_is_b = &a == &b;
@@ -235,79 +175,26 @@ inline auto mul_digits(const Digits& a, const Digits& b, std::size_t output_prec
     offset_a += tail_zero_a;
     offset_b += tail_zero_b;
 
-    auto digits_to_vec64 = [](const Digits& x, std::size_t offset) -> std::vector<uint64_t> {
-        const std::size_t     n = x.size();
-        std::vector<uint64_t> res;
-        res.reserve(ceil_div<std::size_t>((n - offset) * DIGIT_BITS, 64ull));
-        uint128_t   tmp      = 0;
-        std::size_t tmp_bits = 0;
-        std::size_t i        = offset;
-        while (i < n) {
-            while (tmp_bits < 64 && i < n) {
-                tmp |= static_cast<uint128_t>(x[i]) << tmp_bits;
-                tmp_bits += DIGIT_BITS;
-                ++i;
-            }
-            res.push_back(tmp);
-            tmp >>= 64;
-            tmp_bits -= 64;
-        }
-        if (tmp) {
-            res.push_back(tmp);
-        } else {
-            utils::remove_leading_zero(res);
-        }
-        return res;
-    };
+    auto A = std::span<const uint64_t>(a).subspan(offset_a);
 
-    auto A = digits_to_vec64(a, offset_a);
-
-    auto C = _mul(A, a_is_b ? A : digits_to_vec64(b, offset_b));
-
-    Digits res;
-    res.reserve(ceil_div<std::size_t>(C.size() * 64, DIGIT_BITS));
-    {
-        uint128_t   tmp      = 0;
-        std::size_t tmp_bits = 0;
-        std::size_t i        = 0;
-        while (i < C.size()) {
-            if (tmp_bits < DIGIT_BITS) {
-                tmp |= static_cast<uint128_t>(C[i]) << tmp_bits;
-                tmp_bits += 64;
-                ++i;
-            }
-            while (tmp_bits >= DIGIT_BITS) {
-                res.push_back(tmp & DIGIT_MASK);
-                tmp >>= DIGIT_BITS;
-                tmp_bits -= DIGIT_BITS;
-            }
-        }
-        if (tmp) {
-            while (tmp) {
-                res.push_back(tmp & DIGIT_MASK);
-                tmp >>= DIGIT_BITS;
-            }
-        } else {
-            utils::remove_leading_zero(res);
-        }
-    }
+    auto C = _mul(A, a_is_b ? A : std::span<const uint64_t>(b).subspan(offset_b));
 
     if (output_precision) {
-        auto offset_res = res.size() <= output_precision ? 0 : res.size() - output_precision;
-        while (res[offset_res] == 0) {
+        auto offset_res = C.size() <= output_precision ? 0 : C.size() - output_precision;
+        while (C[offset_res] == 0) {
             ++offset_res;
         }
         if (offset_res) {
-            res.erase(res.begin(), res.begin() + static_cast<int64_t>(offset_res));
+            C.erase(C.begin(), C.begin() + static_cast<int64_t>(offset_res));
         }
         if (p_result_point_pos) {
             *p_result_point_pos -= static_cast<int64_t>(offset_a + offset_b + offset_res);
         }
     } else {
-        res.insert(res.begin(), tail_zero_a + tail_zero_b, 0);
+        C.insert(C.begin(), tail_zero_a + tail_zero_b, 0);
     }
 
-    return res;
+    return C;
 }
 
 }  // namespace bigint::mul

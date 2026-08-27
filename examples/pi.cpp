@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <fstream>
@@ -104,7 +105,7 @@ auto main() -> int {
     BigFloat s(1.0 / std::sqrt(10005));
     {
         const BigFloat a(1.5);
-        std::size_t    cur_prec = 52 / DIGIT_BITS;
+        std::size_t    cur_prec = std::max<std::size_t>(1, 52 / DIGIT_BITS);
         while (cur_prec < inner_precision) {
             cur_prec *= 2;
             auto ss = BigFloat::mul(s, s, cur_prec);

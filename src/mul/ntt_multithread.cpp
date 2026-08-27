@@ -159,11 +159,11 @@ public:
             for (std::size_t i = start * ntt::NUM_PRIMES; i < end * ntt::NUM_PRIMES;
                 i += ntt::NUM_PRIMES) {
                 uint128_t x = ntt::garner_merge(v[i + 0], v[i + 1], v[i + 2]);
-                v[i + 0]    = x & DIGIT_MASK;
-                x >>= DIGIT_BITS;
-                v[i + 1] = x & DIGIT_MASK;
-                x >>= DIGIT_BITS;
-                v[i + 2] = x & DIGIT_MASK;
+                v[i + 0]    = x & ntt::NTT_DIGIT_MASK;
+                x >>= ntt::NTT_DIGIT_BITS;
+                v[i + 1] = x & ntt::NTT_DIGIT_MASK;
+                x >>= ntt::NTT_DIGIT_BITS;
+                v[i + 2] = x & ntt::NTT_DIGIT_MASK;
             }
             return end != total;
         }
@@ -379,7 +379,7 @@ static void imm_ntt(std::span<uint32_t> v, bool rev) {
 }
 
 // 利用中国剩余定理从 imm_ntt 逆变换结果中复原出真实数据，
-// 拆成 3 个 DIGIT_BITS 位二进制数写回原位，
+// 拆成 3 个 NTT_DIGIT_BITS 位二进制数写回原位，
 // 调用者应当保证这样的拆分是安全的。
 void crt_merge(std::span<uint32_t> v) {
     const std::size_t n = v.size();
@@ -390,11 +390,11 @@ void crt_merge(std::span<uint32_t> v) {
     if (n < ntt::NUM_PRIMES * NTTThreadPool::CRTMergeTask::THRESHOLD || !pool.is_valid()) {
         for (std::size_t i = 0; i < n; i += ntt::NUM_PRIMES) {
             uint128_t x = ntt::garner_merge(v[i + 0], v[i + 1], v[i + 2]);
-            v[i + 0]    = x & DIGIT_MASK;
-            x >>= DIGIT_BITS;
-            v[i + 1] = x & DIGIT_MASK;
-            x >>= DIGIT_BITS;
-            v[i + 2] = x & DIGIT_MASK;
+            v[i + 0]    = x & ntt::NTT_DIGIT_MASK;
+            x >>= ntt::NTT_DIGIT_BITS;
+            v[i + 1] = x & ntt::NTT_DIGIT_MASK;
+            x >>= ntt::NTT_DIGIT_BITS;
+            v[i + 2] = x & ntt::NTT_DIGIT_MASK;
         }
     } else {
         NTTThreadPool::CRTMergeTask task{{}, v};
@@ -475,8 +475,8 @@ auto mul(std::span<const uint64_t> A, std::span<const uint64_t> B) -> std::vecto
     };
 
     std::size_t           new_size =
-                              std::bit_ceil(ceil_div<std::size_t>(A.size() * 64, NTT_DIGIT_BITS)
-                                            + ceil_div<std::size_t>(B.size() * 64, NTT_DIGIT_BITS) - 1),
+                              std::bit_ceil(detail::ceil_div<std::size_t>(A.size() * 64, NTT_DIGIT_BITS)
+                                            + detail::ceil_div<std::size_t>(B.size() * 64, NTT_DIGIT_BITS) - 1),
                           new_size_ntt = new_size * 3;
     std::vector<uint32_t> vec_a;
     vec_a.reserve(new_size_ntt);
@@ -503,7 +503,7 @@ auto mul(std::span<const uint64_t> A, std::span<const uint64_t> B) -> std::vecto
     trim(vec_a);
 
     std::vector<uint64_t> res;
-    res.reserve(ceil_div<std::size_t>(vec_a.size() * NTT_DIGIT_BITS, 64));
+    res.reserve(detail::ceil_div<std::size_t>(vec_a.size() * NTT_DIGIT_BITS, 64));
     {
         uint128_t   tmp      = 0;
         int         tmp_bits = 0;
@@ -523,7 +523,7 @@ auto mul(std::span<const uint64_t> A, std::span<const uint64_t> B) -> std::vecto
         if (tmp) {
             res.emplace_back(tmp);
         } else {
-            utils::remove_leading_zero(res);
+            detail::remove_leading_zero(res);
         }
     }
 

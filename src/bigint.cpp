@@ -7,6 +7,7 @@
 #include <iostream>
 #include <mutex>
 #include <optional>
+#include <span>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -19,6 +20,17 @@
 
 
 namespace bigint {
+
+// 将 v 视为模 2^(64*v.size()) 的数取补码（-v mod 2^(64*size)），
+// 用于绝对值相减结果为负后的取负。
+static void negate_two_complement(Digits& v) {
+    uint64_t carry = 1;
+    for (auto& num : v) {
+        const bool was_zero = num == 0;
+        num                 = ~num + carry;
+        carry               = (was_zero && carry) ? 1 : 0;
+    }
+}
 
 std::array<std::size_t, 2> BigInt::DEC_STRING_BRUTE_THRESHOLDS =
     DEC_STRING_BRUTE_THRESHOLDS_DEFAULT;
@@ -49,15 +61,16 @@ BigInt::BigInt(const std::string& s, bool hex)
                 break;
             }
         }
-        uint32_t    digit = 0, offset = 0;
-        std::size_t i = n;
+        uint64_t    digit  = 0;
+        uint32_t    offset = 0;
+        std::size_t i      = n;
         while (i > rend) {
             --i;
             uint32_t num = hex_map[static_cast<unsigned char>(s[i])];
             if (num > HEX_MAX) {
                 continue;
             }
-            digit |= num << offset;
+            digit |= static_cast<uint64_t>(num) << offset;
             offset += HEX_BITS;
             if (offset == DIGIT_BITS) {
                 offset = 0;
@@ -128,7 +141,7 @@ auto BigInt::to_dec_string_brute() const -> std::string {
     if (is_zero())
         return "0";
 
-    constexpr std::size_t pow_max = floor_log(TEN, UINT64_MAX);
+    constexpr std::size_t pow_max = detail::floor_log(TEN, UINT64_MAX);
     constexpr uint64_t    divisor = fast_pow(static_cast<uint64_t>(TEN), pow_max);
 
     BigInt      temp = *this;
@@ -309,17 +322,9 @@ void BigInt::unsigned_self_inc_or_dec(bool is_inc) {
         unreachable();
     }
     if (is_inc) {
-        for (; i < n; ++i) {
-            if (data_[i] != DIGIT_MASK) {
-                ++data_[i];
-                break;
-            }
-        }
-        if (i == n) {
+        // 整体 +1（全 MAX 时归零并进位）
+        if (detail::add1(data_)) {
             data_.push_back(1);
-        }
-        if (i) {
-            std::fill(data_.begin(), data_.begin() + static_cast<int64_t>(i), 0);
         }
     } else {
         for (; i < n; ++i) {
@@ -332,8 +337,9 @@ void BigInt::unsigned_self_inc_or_dec(bool is_inc) {
             unreachable();
         }
         if (i) {
-            std::fill(data_.begin(), data_.begin() + static_cast<int64_t>(i), DIGIT_MASK);
+            std::fill(data_.begin(), data_.begin() + static_cast<int64_t>(i), UINT64_MAX);
         }
+        remove_leading_zero();  // 最高位减到 0 时消除前导 0，保持不变量
     }
 }
 
@@ -364,19 +370,6 @@ auto BigInt::operator--(int) -> BigInt {
     return temp;
 }
 
-auto BigInt::trim_all(bool is_borrow) -> uint32_t {
-    if (data_.size() == 0) {
-        unreachable();
-    }
-    uint32_t carry = 0;
-    for (auto& num : data_) {
-        num   = is_borrow ? num - carry : num + carry;
-        carry = (num >> DIGIT_BITS) != 0;
-        num &= DIGIT_MASK;
-    }
-    return carry;
-}
-
 void BigInt::inplace_add_or_sub(const BigInt& b, bool is_sub) {
     const std::size_t n = b.data_.size();
     if (data_.size() == 0 || n == 0) {
@@ -386,26 +379,20 @@ void BigInt::inplace_add_or_sub(const BigInt& b, bool is_sub) {
         data_.resize(n);
     }
     if (is_neg_ ^ b.is_neg_ ^ is_sub) {
-        for (std::size_t i = 0; i < n; ++i) {
-            data_[i] -= b.data_[i];
-        }
-        remove_leading_zero();
-        if (is_zero())
-            return;
-        if (data_.back() >> DIGIT_BITS) {
+        // 绝对值相减：逐 limb 传播借位，最终借位为 true 表示 |a| < |b|（结果为负）。
+        // 借位为 true 时 sub 结果是补码表示（可能带高位 0），必须先取补再规范化；
+        // |a| == |b| 时结果为 0，remove_leading_zero 内部会 reset（含清符号）。
+        bool borrow = detail::sub(data_, b.data_, data_);
+        if (borrow) {
             is_neg_ = !is_neg_;
-            for (auto& num : data_)
-                num = -num;
+            negate_two_complement(data_);
         }
-        trim_all(true);
         remove_leading_zero();
     } else {
-        for (std::size_t i = 0; i < n; ++i) {
-            data_[i] += b.data_[i];
-        }
-        uint32_t carry = trim_all(false);
+        // 绝对值相加
+        bool carry = detail::add(data_, b.data_, data_);
         if (carry)
-            data_.push_back(carry);
+            data_.push_back(1);
         else
             remove_leading_zero();
     }
@@ -417,37 +404,25 @@ void BigInt::inplace_add_or_sub(uint64_t b, bool is_sub) {
     }
     if (b == 0)
         return;
-    data_.resize(
-        std::max(data_.size(), static_cast<std::size_t>(std::bit_width(b) / DIGIT_BITS) + 1));
-    std::size_t i = 0;
     if (is_neg_ ^ is_sub) {
-        while (b) {
-            data_[i] -= static_cast<uint32_t>(b) & DIGIT_MASK;
-            b >>= DIGIT_BITS;
-            ++i;
+        // 绝对值相减：只处理单个 b，先减首个 limb，再向高位传播借位
+        bool borrow = detail::sub_overflow(data_[0], b, data_[0]);
+        for (std::size_t i = 1; borrow && i < data_.size(); ++i) {
+            borrow = detail::sub_overflow(data_[i], uint64_t(1), data_[i]);
         }
-        remove_leading_zero();
-        if (is_zero())
-            return;
-        if (data_.back() >> DIGIT_BITS) {
+        if (borrow) {  // |a| < b，结果为负：补码结果取补
             is_neg_ = !is_neg_;
-            for (auto& num : data_) {
-                num = -num;
-            }
+            negate_two_complement(data_);
         }
-        trim_all(true);
+        // |a| == b 时结果为 0，remove_leading_zero 内部会 reset（含清符号）
         remove_leading_zero();
     } else {
-        while (b) {
-            data_[i] += static_cast<uint32_t>(b) & DIGIT_MASK;
-            b >>= DIGIT_BITS;
-            ++i;
-        }
-        uint32_t carry = trim_all(false);
-        if (carry)
-            data_.push_back(carry);
-        else
+        // 绝对值相加：先加单个 b，进位则对高位 limb 段整体 +1
+        if (!detail::add_overflow(data_[0], b, data_[0])) {
             remove_leading_zero();
+        } else if (detail::add1(std::span<uint64_t>(data_).subspan(1))) {
+            data_.push_back(1);
+        }
     }
 }
 
@@ -458,30 +433,24 @@ void BigInt::unsigned_inplace_mul(uint64_t b) {
         reset();
     } else if ((b & (b - 1)) == 0) {  // b 是 2 的幂
         *this <<= std::countr_zero(b);
-    } else if (b <= UINT32_MAX) {
-        unsigned_inplace_mul<uint64_t, uint32_t>(b);
     } else {
-        unsigned_inplace_mul<uint128_t, uint64_t>(b);
-    }
-}
-
-template<typename C, typename T> void BigInt::unsigned_inplace_mul(T b) {
-    if (data_.size() == 0) {
-        unreachable();
-    }
-    C digit = 0, carry = 0;
-    for (auto& num : data_) {
-        digit = static_cast<C>(b) * num + carry;
-        num   = static_cast<uint32_t>(digit) & DIGIT_MASK;
-        carry = digit >> DIGIT_BITS;
-    }
-    if (carry) {
-        while (carry) {
-            data_.push_back(static_cast<uint32_t>(carry) & DIGIT_MASK);
-            carry >>= DIGIT_BITS;
+        if (data_.size() == 0) {
+            unreachable();
         }
-    } else {
-        remove_leading_zero();
+        uint128_t carry = 0;
+        for (auto& num : data_) {
+            auto digit = static_cast<uint128_t>(b) * num + carry;
+            num        = static_cast<uint64_t>(digit);
+            carry      = digit >> 64;
+        }
+        if (carry) {
+            while (carry) {
+                data_.push_back(static_cast<uint64_t>(carry));
+                carry >>= 64;
+            }
+        } else {
+            remove_leading_zero();
+        }
     }
 }
 
@@ -497,7 +466,7 @@ auto BigInt::unsigned_inplace_divmod(uint64_t b) -> uint64_t {
     while (i) {
         --i;
         rem      = (rem << DIGIT_BITS) + data_[i];
-        data_[i] = static_cast<uint32_t>(rem / b);
+        data_[i] = static_cast<uint64_t>(rem / b);
         rem %= b;
     }
     remove_leading_zero();
@@ -516,11 +485,10 @@ void BigInt::shift_left(Digits& v, uint64_t offset) {
     const std::size_t new_size = v.size() + idx_offset + 1;
     v.resize(new_size);
     for (std::size_t i = new_size - 1; i > idx_offset; --i) {
-        v[i] = ((v[i - idx_offset] << bit_offset)
-                   | (v[i - idx_offset - 1] >> (DIGIT_BITS - bit_offset)))
-               & DIGIT_MASK;
+        v[i] = (v[i - idx_offset] << bit_offset)
+               | (v[i - idx_offset - 1] >> (DIGIT_BITS - bit_offset));
     }
-    v[idx_offset] = (v[0] << bit_offset) & DIGIT_MASK;
+    v[idx_offset] = v[0] << bit_offset;
     std::fill(v.begin(), v.begin() + static_cast<int64_t>(idx_offset), 0);
 }
 
@@ -540,9 +508,8 @@ void BigInt::shift_right(Digits& v, uint64_t offset) {
     }
     const std::size_t new_size = v.size() - idx_offset;
     for (std::size_t i = 0; i < new_size - 1; ++i) {
-        v[i] = ((v[i + idx_offset] >> bit_offset)
-                   | (v[i + idx_offset + 1] << (DIGIT_BITS - bit_offset)))
-               & DIGIT_MASK;
+        v[i] = (v[i + idx_offset] >> bit_offset)
+               | (v[i + idx_offset + 1] << (DIGIT_BITS - bit_offset));
     }
     v[new_size - 1] = v.back() >> bit_offset;
     v.resize(new_size);
@@ -617,7 +584,7 @@ auto BigInt::bitwise_not(std::size_t len) -> BigInt& {
         data_.resize(len);
     }
     for (auto& num : data_) {
-        num = (~num) & DIGIT_MASK;
+        num = ~num;
     }
     remove_leading_zero();
     return *this;
@@ -707,10 +674,8 @@ BigFloat::BigFloat(double value)
         offset += exponent_bits;
     }
 
-    while (base) {
-        data_.push_back(static_cast<uint32_t>(base) & DIGIT_MASK);
-        base >>= DIGIT_BITS;
-    }
+    // 尾数不超过 53 位，单个 64 位 limb 即可表示
+    data_.push_back(base);
 
     shift(offset);
 }
@@ -750,7 +715,7 @@ auto BigFloat::to_double() const -> double {
         mantissa_bits = shl(data_.back(), offset);
     } else {  // 正规数
         offset        = DOUBLE_MANTISSA_LEN - (highest_bit_width - 1);
-        mantissa_bits = shl(data_.back() & ((1 << (highest_bit_width - 1)) - 1), offset);
+        mantissa_bits = shl(data_.back() & ((uint64_t(1) << (highest_bit_width - 1)) - 1), offset);
     }
 
     std::size_t i = data_.size() - 1;
@@ -795,7 +760,7 @@ void BigFloat::shift_right(Digits& v, uint32_t offset) {
     }
     const std::size_t n = v.size();
     for (std::size_t i = 0; i < n - 1; ++i) {
-        v[i] = ((v[i] >> offset) | (v[i + 1] << (DIGIT_BITS - offset))) & DIGIT_MASK;
+        v[i] = (v[i] >> offset) | (v[i + 1] << (DIGIT_BITS - offset));
     }
     v[n - 1] >>= offset;
 }
@@ -807,9 +772,9 @@ void BigFloat::shift_left(Digits& v, uint32_t offset) {
     v.push_back(0);
     const std::size_t n = v.size();
     for (std::size_t i = n - 1; i > 0; --i) {
-        v[i] = ((v[i] << offset) | (v[i - 1] >> (DIGIT_BITS - offset))) & DIGIT_MASK;
+        v[i] = (v[i] << offset) | (v[i - 1] >> (DIGIT_BITS - offset));
     }
-    v[0] = (v[0] << offset) & DIGIT_MASK;
+    v[0] = v[0] << offset;
 }
 
 auto BigFloat::remove_leading_zero() -> std::size_t {
@@ -894,41 +859,29 @@ auto BigFloat::add_or_sub(const BigFloat& a, const BigFloat& b, bool is_sub) -> 
         res.data_[i + offset_a] = a.data_[i];
     }
 
+    // 对齐后的 b 段与 res 对应段（加减分支共用）
+    const auto b_span = std::span<const uint64_t>(b.data_).subspan(tail_zero_b);
+    auto       c_span = std::span<uint64_t>(res.data_)
+                            .subspan(static_cast<std::size_t>(offset_b + tail_zero_b));
+
     if (a.is_neg_ ^ b.is_neg_ ^ is_sub) {  // 绝对值相减
 
-        for (auto i = tail_zero_b; i < len_b; ++i) {
-            res.data_[i + offset_b] -= b.data_[i];
-        }
-        res.remove_leading_zero();
-        if (res.is_zero())
-            return res;
-        if (res.data_.back() >> DIGIT_BITS) {
+        // C -= B（借位自动传播到 res 末尾）
+        bool borrow = detail::sub(c_span, b_span, c_span);
+        if (borrow) {  // |a| < |b|，结果为负：sub 结果是补码，先取补再规范化
             res.is_neg_ = !res.is_neg_;
-            for (auto& num : res.data_) {
-                num = -num;
-            }
+            negate_two_complement(res.data_);
         }
-        uint32_t borrow = 0;
-        for (auto& num : res.data_) {
-            num -= borrow;
-            borrow = (num >> DIGIT_BITS) != 0;
-            num &= DIGIT_MASK;
-        }
+        // |a| == |b| 时结果为 0，remove_leading_zero 内部会 reset（含清符号），
+        // 末尾的 remove_tail_zero 对全 0 有保护，无需在此提前返回。
         res.remove_leading_zero();
 
     } else {  // 绝对值相加
 
-        for (auto i = tail_zero_b; i < len_b; ++i) {
-            res.data_[i + offset_b] += b.data_[i];
-        }
-        uint32_t carry = 0;
-        for (auto& num : res.data_) {
-            num += carry;
-            carry = num >> DIGIT_BITS;
-            num &= DIGIT_MASK;
-        }
+        // C += B（进位自动传播到 res 末尾）
+        bool carry = detail::add(c_span, b_span, c_span);
         if (carry)
-            res.data_.push_back(carry);
+            res.data_.push_back(1);
         else
             res.remove_leading_zero();
     }
@@ -943,30 +896,24 @@ void BigFloat::unsigned_inplace_mul(uint64_t b) {
         reset();
     } else if ((b & (b - 1)) == 0) {  // b 是 2 的幂
         *this <<= std::countr_zero(b);
-    } else if (b <= UINT32_MAX) {
-        unsigned_inplace_mul<uint64_t, uint32_t>(b);
     } else {
-        unsigned_inplace_mul<uint128_t, uint64_t>(b);
-    }
-}
-
-template<typename C, typename T> void BigFloat::unsigned_inplace_mul(T b) {
-    if (data_.size() == 0) {
-        unreachable();
-    }
-    C digit = 0, carry = 0;
-    for (auto& num : data_) {
-        digit = static_cast<C>(b) * num + carry;
-        num   = static_cast<uint32_t>(digit) & DIGIT_MASK;
-        carry = digit >> DIGIT_BITS;
-    }
-    if (carry) {
-        while (carry) {
-            data_.push_back(static_cast<uint32_t>(carry) & DIGIT_MASK);
-            carry >>= DIGIT_BITS;
+        if (data_.size() == 0) {
+            unreachable();
         }
-    } else {
-        remove_leading_zero();
+        uint128_t carry = 0;
+        for (auto& num : data_) {
+            auto digit = static_cast<uint128_t>(b) * num + carry;
+            num        = static_cast<uint64_t>(digit);
+            carry      = digit >> 64;
+        }
+        if (carry) {
+            while (carry) {
+                data_.push_back(static_cast<uint64_t>(carry));
+                carry >>= 64;
+            }
+        } else {
+            remove_leading_zero();
+        }
     }
 }
 
@@ -1060,7 +1007,7 @@ auto BigFloat::reciprocal(std::size_t precision) const -> BigFloat {
     BigFloat b(*this >> exponent);
     b.remove_tail_zero();
     BigFloat    x(1 / b.to_double());
-    std::size_t cur_precision = DOUBLE_MANTISSA_LEN / DIGIT_BITS;
+    std::size_t cur_precision = std::max<std::size_t>(1, DOUBLE_MANTISSA_LEN / DIGIT_BITS);
     // 牛顿迭代：x = x + x * (1 - b * x)
     const BigFloat one(1);
     while (cur_precision < precision) {
@@ -1095,21 +1042,16 @@ static void _round(RoundMode mode, Digits& v, bool is_neg, int64_t round_idx) {
     default: increase_abs = false; break;
     }
     v.erase(v.begin(), v.begin() + round_idx + 1);
+    if (v.empty() && !increase_abs) {  // 全部被舍掉且无需进位：结果为 0
+        v.push_back(0);
+        return;
+    }
     if (!increase_abs) {
         return;
     }
-    std::size_t i = 0, n = v.size();
-    for (; i < n; ++i) {
-        if (v[i] != DIGIT_MASK) {
-            ++v[i];
-            break;
-        }
-    }
-    if (i == n) {
+    // 需要进位：v 为空（全部被舍掉）时 add1 对空 span 直接返回 true，即 ceil/floor 进位为 1
+    if (detail::add1(v)) {
         v.push_back(1);
-    }
-    if (i) {
-        std::fill(v.begin(), v.begin() + static_cast<int64_t>(i), 0);
     }
 }
 
