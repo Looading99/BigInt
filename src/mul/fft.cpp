@@ -22,14 +22,14 @@ static const auto m_store = [](double* p, __m256d a) -> void { _mm256_store_pd(p
 
 static inline void complex_mul_simd(
     __m256d a_re, __m256d a_im, __m256d b_re, __m256d b_im, __m256d& res_re, __m256d& res_im) {
-    res_re = _mm256_fmsub_pd(a_re, b_re, _mm256_mul_pd(a_im, b_im));
-    res_im = _mm256_fmadd_pd(a_re, b_im, _mm256_mul_pd(a_im, b_re));
+    res_re = _mm256_fmsub_pd(a_re, b_re, m_mul(a_im, b_im));
+    res_im = _mm256_fmadd_pd(a_re, b_im, m_mul(a_im, b_re));
 }
 
 static inline void complex_square_simd(__m256d re, __m256d im, __m256d& n_re, __m256d& n_im) {
-    n_re      = _mm256_mul_pd(_mm256_add_pd(re, im), _mm256_sub_pd(re, im));
-    __m256d t = _mm256_mul_pd(re, im);
-    n_im      = _mm256_add_pd(t, t);
+    n_re      = m_mul(m_add(re, im), m_sub(re, im));
+    __m256d t = m_mul(re, im);
+    n_im      = m_add(t, t);
 }
 
 static inline void transpose_4x4d(__m256d& r0, __m256d& r1, __m256d& r2, __m256d& r3) {
