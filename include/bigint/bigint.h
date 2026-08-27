@@ -49,8 +49,8 @@ void init_thread_pool(uint32_t n);
 class BigInt {
 public:
     // 从十进制字符串转换和转换到十进制字符串的分治阈值
-    static std::array<size_type, 2>           DEC_STRING_BRUTE_THRESHOLDS;
-    static constexpr std::array<size_type, 2> DEC_STRING_BRUTE_THRESHOLDS_DEFAULT = {5000, 2000};
+    static std::array<std::size_t, 2>           DEC_STRING_BRUTE_THRESHOLDS;
+    static constexpr std::array<std::size_t, 2> DEC_STRING_BRUTE_THRESHOLDS_DEFAULT = {5000, 2000};
 
     explicit constexpr BigInt(UnsignedIntegral auto x)
         : BigInt(x, false) {}
@@ -86,7 +86,7 @@ public:
 
     explicit BigInt(BigFloat&& x, RoundMode mode = RoundMode::Truncate);
 
-    [[nodiscard]] constexpr auto len() const noexcept -> size_type { return data_.size(); }
+    [[nodiscard]] constexpr auto len() const noexcept -> std::size_t { return data_.size(); }
 
     [[nodiscard]] constexpr auto get_data() const noexcept -> const Digits& { return data_; }
 
@@ -219,7 +219,7 @@ public:
     auto operator^=(const BigInt& b) -> BigInt&;
 
     // 忽略符号，就地转换，将自身长度视为传入值，不传入或传入 0 使用自身长度。
-    auto bitwise_not(size_type len = 0) -> BigInt&;
+    auto bitwise_not(std::size_t len = 0) -> BigInt&;
 
     // 当且仅当自身为 0 时为 false。
     explicit constexpr operator bool() const noexcept { return !is_zero(); }
@@ -375,16 +375,16 @@ private:
         }
     }
 
-    static auto convert_from_dec_string(const std::string& s, size_type start, size_type end)
-        -> std::pair<BigInt, size_type>;
+    static auto convert_from_dec_string(const std::string& s, std::size_t start, std::size_t end)
+        -> std::pair<BigInt, std::size_t>;
 
     [[nodiscard]] auto to_dec_string_brute() const -> std::string;
     // 假定流标志干净，传入 len 填充前导 0
-    void print_dec(std::ostream& output, size_type len = 0) const;
+    void print_dec(std::ostream& output, std::size_t len = 0) const;
     // 假定流标志干净
     void print_hex(std::ostream& output) const;
 
-    auto remove_leading_zero() -> size_type;
+    auto remove_leading_zero() -> std::size_t;
 
     void unsigned_self_inc_or_dec(bool is_dec);
 
@@ -468,7 +468,7 @@ public:
         return *this;
     }
 
-    [[nodiscard]] constexpr auto len() const noexcept -> size_type { return data_.size(); }
+    [[nodiscard]] constexpr auto len() const noexcept -> std::size_t { return data_.size(); }
 
     [[nodiscard]] constexpr auto get_point_pos() const noexcept -> int64_t { return point_pos_; }
 
@@ -506,7 +506,7 @@ public:
     // 小数位数不传或传 0 使用二进制小数位数 * log10(2) ，想只输出整数请使用 round 。
     // **不要**将输出的字符串直接传递给 BigFloat 的构造函数，会导致精度损失和丢失小数点信息！
     // direct 参数同 BigInt::print 。
-    void print(std::ostream& output, size_type dec_digits = 0, bool direct = false) const;
+    void print(std::ostream& output, std::size_t dec_digits = 0, bool direct = false) const;
 
     // 使用默认位数将自身转换为字符串输出到流，避免复制请直接使用 print 。
     friend auto operator<<(std::ostream& output, const BigFloat& a) -> std::ostream& {
@@ -515,7 +515,7 @@ public:
     }
 
     // @see print
-    [[nodiscard]] auto to_string(size_type dec_digits = 0) const -> std::string {
+    [[nodiscard]] auto to_string(std::size_t dec_digits = 0) const -> std::string {
         std::ostringstream res;
         print(res, dec_digits, true);
         return res.str();
@@ -529,7 +529,7 @@ public:
     }
 
     // 求倒数，precision 为 0 时使用输入精度
-    [[nodiscard]] auto reciprocal(size_type precision = 0) const -> BigFloat;
+    [[nodiscard]] auto reciprocal(std::size_t precision = 0) const -> BigFloat;
 
     [[nodiscard]] constexpr auto operator+() const -> BigFloat { return *this; }
 
@@ -616,7 +616,7 @@ public:
         return b;
     }
 
-    static auto mul(const BigFloat& a, const BigFloat& b, size_type precision) -> BigFloat {
+    static auto mul(const BigFloat& a, const BigFloat& b, std::size_t precision) -> BigFloat {
         if (a.is_zero() || b.is_zero()) {
             return BigFloat(0);
         } else {
@@ -647,13 +647,13 @@ private:
 
     static void shift_left(Digits& v, uint32_t offset);
 
-    auto remove_leading_zero() -> size_type;
+    auto remove_leading_zero() -> std::size_t;
 
-    auto remove_tail_zero() -> size_type;
+    auto remove_tail_zero() -> std::size_t;
 
     static auto add_or_sub(const BigFloat& a, const BigFloat& b, bool is_sub) -> BigFloat;
 
-    static auto ntt_mul(const BigFloat& a, const BigFloat& b, size_type output_precision = 0)
+    static auto ntt_mul(const BigFloat& a, const BigFloat& b, std::size_t output_precision = 0)
         -> BigFloat;
 
     void unsigned_inplace_mul(uint64_t b);
@@ -685,7 +685,7 @@ struct BigIntPrintHelper {
 
 struct BigFloatPrintHelper {
     const BigFloat* ptr;
-    size_type       dec_digits;
+    std::size_t     dec_digits;
     bool            direct;
 
     friend auto operator<<(std::ostream& output, const BigFloatPrintHelper& helper)
@@ -702,8 +702,8 @@ inline auto print(const BigInt& BigInt_to_print, bool hex = false, bool direct =
 }
 
 // 流式代理输出，参数 @see BigFloat::print
-inline auto print(const BigFloat& BigFloat_to_print, size_type dec_digits = 0, bool direct = false)
-    -> BigFloatPrintHelper {
+inline auto print(const BigFloat& BigFloat_to_print, std::size_t dec_digits = 0,
+    bool direct = false) -> BigFloatPrintHelper {
     return {.ptr = &BigFloat_to_print, .dec_digits = dec_digits, .direct = direct};
 }
 

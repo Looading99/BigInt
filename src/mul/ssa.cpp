@@ -13,14 +13,14 @@
 namespace bigint::mul::ssa {
 
 //  计算 C = A + B mod (2^m+1)，必须保证 A 和 B < 2^m+1，C.size() >= m/64+1 且 m 是 64 的倍数
-static inline void mod_add(
-    std::span<const uint64_t> A, std::span<const uint64_t> B, std::span<uint64_t> C, size_type m) {
-    size_type w = m / 64;
+static inline void mod_add(std::span<const uint64_t> A, std::span<const uint64_t> B,
+    std::span<uint64_t> C, std::size_t m) {
+    std::size_t w = m / 64;
     if (!(C.size() >= w + 1 && m % 64 == 0))
         unreachable();
     utils::add(A, B, C.size() == w + 1 ? C : C.subspan(0, w + 1));
     if (C[w]) {  // C >= 2^m
-        size_type i = 0;
+        std::size_t i = 0;
         for (; i < w; ++i) {
             if (C[i] != 0) {
                 break;
@@ -37,9 +37,9 @@ static inline void mod_add(
 }
 
 // 要求与 mod_add 相同
-static inline void mod_sub(
-    std::span<const uint64_t> A, std::span<const uint64_t> B, std::span<uint64_t> C, size_type m) {
-    size_type w = m / 64;
+static inline void mod_sub(std::span<const uint64_t> A, std::span<const uint64_t> B,
+    std::span<uint64_t> C, std::size_t m) {
+    std::size_t w = m / 64;
     if (!(C.size() >= w + 1 && m % 64 == 0))
         unreachable();
     bool borrow = utils::sub(A, B, C.size() == w + 1 ? C : C.subspan(0, w + 1));
@@ -50,8 +50,8 @@ static inline void mod_sub(
 }
 
 // 计算 A = -A mod (2^m+1)，必须保证 A < 2^m+1 且 A.size() >= m/64+1 且 m 是 64 的倍数
-static void mod_neg(std::span<uint64_t> A, size_type m) {
-    size_type w = m / 64;
+static void mod_neg(std::span<uint64_t> A, std::size_t m) {
+    std::size_t w = m / 64;
     if (!(A.size() >= w + 1 && m % 64 == 0))
         unreachable();
     // A = 2^m 时结果为 1
@@ -61,7 +61,7 @@ static void mod_neg(std::span<uint64_t> A, size_type m) {
         return;
     }
     // 0 < A < 2^m 时等价于计算 2^m+1 - A = 2^m-1 - A + 2
-    size_type i = 0;
+    std::size_t i = 0;
     for (; i < w; ++i) {
         if (A[i] != 0) {
             break;
@@ -84,20 +84,20 @@ static void mod_neg(std::span<uint64_t> A, size_type m) {
 }
 
 // 计算 A = A mod (2^m+1)，m 必须是 64 的倍数
-static void mod(std::span<uint64_t> A, size_type m) {
+static void mod(std::span<uint64_t> A, std::size_t m) {
     if (!(m % 64 == 0))
         unreachable();
-    size_type w = m / 64;
+    std::size_t w = m / 64;
     if (A.size() <= w) {
         return;
     }
     // 将 A 每 w 个数分割成 k 块
-    auto k = ceil_div<size_type>(A.size(), w);
+    auto k = ceil_div<std::size_t>(A.size(), w);
     // A mod = A_0 - A_1 + A_2 - A_3 + ...。
     // 迭代 R = (A_i - R) mod (2^m+1) for i from 1 to k-1，初始值为 A_0
     // R 有 w + 1 位，注意 i = 1 时 R 最高位与 A_1 重叠，读取时跳过即可
     auto R = A.subspan(0, w + 1);
-    for (size_type i = 1; i < k; ++i) {
+    for (std::size_t i = 1; i < k; ++i) {
         auto A_i = i < k - 1 ? A.subspan(i * w, w) : A.subspan(i * w);
         mod_sub(A_i, i == 1 ? R.subspan(0, w) : R, R, m);
     }
@@ -111,8 +111,8 @@ static void mod(std::span<uint64_t> A, size_type m) {
 // 且 m 是 2 的幂且为 64 的倍数 且 temp.size() >= 2*m/64，
 // A 和 B 的起始地址可以相同或不同，A 长度不足自动补 0
 static void mod_mul_pow_of_two(std::span<const uint64_t> A, std::span<uint64_t> B, uint64_t p,
-    size_type m, std::span<uint64_t> temp) {
-    size_type w = m / 64;
+    std::size_t m, std::span<uint64_t> temp) {
+    std::size_t w = m / 64;
     if (!(B.size() >= w + 1 && m != 0 && std::popcount(m) == 1 && m % 64 == 0
             && temp.size() >= 2 * w))
         unreachable();
@@ -134,8 +134,8 @@ static void mod_mul_pow_of_two(std::span<const uint64_t> A, std::span<uint64_t> 
             std::memset(&B[A.size()], 0, (B.size() - A.size()) * sizeof(uint64_t));
         }
     } else {
-        auto      shl_A      = temp.subspan(0, 2 * w);
-        size_type word_shift = p / 64, bit_shift = p % 64;
+        auto        shl_A      = temp.subspan(0, 2 * w);
+        std::size_t word_shift = p / 64, bit_shift = p % 64;
         std::memset(&shl_A[0], 0, word_shift * sizeof(uint64_t));
         std::memcpy(&shl_A[word_shift], A.data(), A.size() * sizeof(uint64_t));
         if (word_shift + A.size() < 2 * w)
@@ -143,7 +143,7 @@ static void mod_mul_pow_of_two(std::span<const uint64_t> A, std::span<uint64_t> 
                 0,
                 (shl_A.size() - word_shift - A.size()) * sizeof(uint64_t));
         if (bit_shift) {
-            for (size_type i = std::min(word_shift + A.size(), 2 * w - 1); i > word_shift; --i) {
+            for (std::size_t i = std::min(word_shift + A.size(), 2 * w - 1); i > word_shift; --i) {
                 shl_A[i] = (shl_A[i] << bit_shift) | (shl_A[i - 1] >> (64 - bit_shift));
             }
             shl_A[word_shift] <<= bit_shift;
@@ -157,23 +157,23 @@ static void mod_mul_pow_of_two(std::span<const uint64_t> A, std::span<uint64_t> 
 
 // 要求与 mod_mul_pow_of_two 相同
 static inline void mod_div_pow_of_two(std::span<const uint64_t> A, std::span<uint64_t> B,
-    uint64_t p, size_type m, std::span<uint64_t> temp) {
+    uint64_t p, std::size_t m, std::span<uint64_t> temp) {
     mod_mul_pow_of_two(A, B, 2 * m - (p & (2 * m - 1)), m, temp);
 }
 
 // 计算模 2^m+1 的 NTT，必须保证 ptrs.size() == m 是 2 的幂且为 64 的倍数，
 // slices.size() == m*(m/64+1)，temp.size() >= 3*m/64+1
-static void ntt(std::span<uint64_t> ptrs, std::span<uint64_t> slices, size_type m, bool rev,
+static void ntt(std::span<uint64_t> ptrs, std::span<uint64_t> slices, std::size_t m, bool rev,
     std::span<uint64_t> temp) {
-    size_type w = m / 64;
+    std::size_t w = m / 64;
     if (!(m == ptrs.size() && m != 0 && std::popcount(m) == 1 && m % 64 == 0
             && slices.size() == m * (w + 1) && temp.size() >= 3 * w + 1))
         unreachable();
     // 位逆序置换
-    for (size_type i = 1, j = m >> 1; i < m - 1; ++i) {
+    for (std::size_t i = 1, j = m >> 1; i < m - 1; ++i) {
         if (i < j)
             std::swap(ptrs[i], ptrs[j]);
-        size_type k = m >> 1;
+        std::size_t k = m >> 1;
         while (j >= k) {
             j -= k;
             k >>= 1;
@@ -182,14 +182,14 @@ static void ntt(std::span<uint64_t> ptrs, std::span<uint64_t> slices, size_type 
     }
     auto mul_temp = temp.subspan(0, 2 * w);
     auto b        = temp.subspan(2 * w, w + 1);
-    for (size_type len = 2; len <= m; len *= 2) {
-        size_type half     = len / 2;
-        size_type step_exp = 2 * m >> std::countr_zero(len);
+    for (std::size_t len = 2; len <= m; len *= 2) {
+        std::size_t half     = len / 2;
+        std::size_t step_exp = 2 * m >> std::countr_zero(len);
         if (rev)
             step_exp = 2 * m - step_exp;
-        for (size_type i = 0; i < m; i += len) {
-            size_type cur_exp = 0;
-            for (size_type j = 0; j < half; ++j) {
+        for (std::size_t i = 0; i < m; i += len) {
+            std::size_t cur_exp = 0;
+            for (std::size_t j = 0; j < half; ++j) {
                 auto a0 = slices.subspan(ptrs[i + j], w + 1);
                 auto b0 = slices.subspan(ptrs[i + j + half], w + 1);
                 mod_mul_pow_of_two(b0, b, cur_exp, m, mul_temp);
@@ -200,7 +200,7 @@ static void ntt(std::span<uint64_t> ptrs, std::span<uint64_t> slices, size_type 
         }
     }
     if (rev) {
-        for (size_type i = 0; i < m; ++i) {
+        for (std::size_t i = 0; i < m; ++i) {
             auto a = slices.subspan(i * (w + 1), w + 1);
             mod_div_pow_of_two(a, a, std::countr_zero(m), m, temp);
         }
@@ -208,10 +208,10 @@ static void ntt(std::span<uint64_t> ptrs, std::span<uint64_t> slices, size_type 
 }
 
 // m 必须是 2 的幂
-static constexpr auto calc_slice(size_type m) -> std::pair<size_type, size_type> {
+static constexpr auto calc_slice(std::size_t m) -> std::pair<std::size_t, std::size_t> {
     // N = sqrt(2*m)
-    size_type N = 1ull << (std::countr_zero(m) + 1) / 2;
-    size_type K = m / N;
+    std::size_t N = 1ull << (std::countr_zero(m) + 1) / 2;
+    std::size_t K = m / N;
     // 防溢出条件：2^N>=2N*2^(2K) => N-2K>=log2(2N) => N-log2(N)-1>=2K
     while (N - std::countr_zero(N) - 1 < 2 * K) {
         N *= 2;
@@ -220,23 +220,23 @@ static constexpr auto calc_slice(size_type m) -> std::pair<size_type, size_type>
     return {N, K};
 }
 
-static constexpr auto ptrs_size(size_type N) -> size_type {
+static constexpr auto ptrs_size(std::size_t N) -> std::size_t {
     return N;
 }
 
-static constexpr auto slices_size(size_type N) -> size_type {
+static constexpr auto slices_size(std::size_t N) -> std::size_t {
     return N * (N / 64 + 1);
 }
 
-static constexpr auto temp_size(size_type N) -> size_type {
+static constexpr auto temp_size(std::size_t N) -> std::size_t {
     return N / 64 * 3 + 1;
 }
 
-static constexpr auto acc_size(size_type N, size_type K) -> size_type {
+static constexpr auto acc_size(std::size_t N, std::size_t K) -> std::size_t {
     return (N - 1) * K / 64 + N / 64 + 1;
 }
 
-static constexpr auto ssa_size(size_type m) -> size_type {
+static constexpr auto ssa_size(std::size_t m) -> std::size_t {
     // 递归终点为 (A.size() + B.size()) * 64 < MIN_TOTAL_BITS，
     // 且递归过程总是满足 A.size() 和 B.size() <= m / 64 + 1 (仅第一层小于，其余层等于)
     if (2 * (m + 64) < MIN_TOTAL_BITS) {
@@ -248,8 +248,8 @@ static constexpr auto ssa_size(size_type m) -> size_type {
 
 // 计算 C = A*B mod (2^m+1)，必须保证 A 和 B < 2^m+1 且 C.size() >= m/64 + 1 且 m 是 2 的幂
 static void mod_mul(std::span<const uint64_t> A, std::span<const uint64_t> B, std::span<uint64_t> C,
-    size_type m, std::span<uint64_t> buffer) {
-    size_type w = m / 64;
+    std::size_t m, std::span<uint64_t> buffer) {
+    std::size_t w = m / 64;
 
     auto copy_and_fill_zero = [w](std::span<const uint64_t> src, std::span<uint64_t> dst) {
         memcpy(dst.data(), src.data(), std::min(src.size(), w + 1) * sizeof(uint64_t));
@@ -278,8 +278,8 @@ static void mod_mul(std::span<const uint64_t> A, std::span<const uint64_t> B, st
 
     auto [N, K] = calc_slice(m);
 
-    size_type n = N / 64, k = K / 64;
-    size_type buffer_offset = 0;
+    std::size_t n = N / 64, k = K / 64;
+    std::size_t buffer_offset = 0;
 
     auto A_ptrs = buffer.subspan(buffer_offset, ptrs_size(N));
     buffer_offset += A_ptrs.size();
@@ -299,12 +299,12 @@ static void mod_mul(std::span<const uint64_t> A, std::span<const uint64_t> B, st
     auto acc_pos = buffer.subspan(A_ptrs.size() + A_slices.size(), acc_size(N, K));
     auto acc_neg = buffer.subspan(A_ptrs.size() + A_slices.size() + acc_pos.size(), acc_size(N, K));
 
-    for (size_type i = 0; i < N; ++i) {
+    for (std::size_t i = 0; i < N; ++i) {
         A_ptrs[i] = B_ptrs[i] = i * (n + 1);
     }
 
     {
-        size_type i = 0;
+        std::size_t i = 0;
         for (; i < N && i * k < A.size(); ++i) {
             auto a   = A_slices.subspan(i * (n + 1), n + 1);
             auto A_i = A.subspan(i * k, std::min(k, A.size() - i * k));
@@ -328,7 +328,7 @@ static void mod_mul(std::span<const uint64_t> A, std::span<const uint64_t> B, st
         ntt(B_ptrs, B_slices, N, false, temp);
     }
 
-    for (size_type i = 0; i < N; ++i) {
+    for (std::size_t i = 0; i < N; ++i) {
         auto a = A_slices.subspan(A_ptrs[i], n + 1);
         auto b = B_slices.subspan(B_ptrs[i], n + 1);
         mod_mul(a, b, a, N, child_buffer);
@@ -337,7 +337,7 @@ static void mod_mul(std::span<const uint64_t> A, std::span<const uint64_t> B, st
     ntt(A_ptrs, A_slices, N, true, temp);
     // 两次位逆序置换后 A_ptrs 变回连续的
 
-    for (size_type i = 1; i < N; ++i) {
+    for (std::size_t i = 1; i < N; ++i) {
         auto a = A_slices.subspan(i * (n + 1), n + 1);
         mod_div_pow_of_two(a, a, i, N, temp);
     }
@@ -345,9 +345,9 @@ static void mod_mul(std::span<const uint64_t> A, std::span<const uint64_t> B, st
     // 通过比较 A[i] 与 (2^N+1)/2 的大小判断符号，
     // A[i] < (2^N+1)/2 （即 A[i] <= 2^(N-1)）时是非负数，
     // 否则是负数，真实值为 -(2^N+1-A[i])
-    auto check_is_neg = [](std::span<const uint64_t> a, size_type _N) -> bool {
+    auto check_is_neg = [](std::span<const uint64_t> a, std::size_t _N) -> bool {
         // 2^(N-1) : N/64-1 位 0 + 最高位 1 << 63
-        size_type i = a.size() - 1;
+        std::size_t i = a.size() - 1;
         for (; i >= _N / 64; --i) {
             if (a[i]) {
                 return true;
@@ -366,7 +366,7 @@ static void mod_mul(std::span<const uint64_t> A, std::span<const uint64_t> B, st
     };
     std::memset(acc_pos.data(), 0, acc_pos.size() * sizeof(uint64_t));
     std::memset(acc_neg.data(), 0, acc_neg.size() * sizeof(uint64_t));
-    for (size_type i = 0; i < N; ++i) {
+    for (std::size_t i = 0; i < N; ++i) {
         auto a      = A_slices.subspan(i * (n + 1), n + 1);
         bool is_neg = check_is_neg(a, N);
         if (is_neg) {
@@ -383,13 +383,13 @@ static void mod_mul(std::span<const uint64_t> A, std::span<const uint64_t> B, st
 auto mul(std::span<const uint64_t> A, std::span<const uint64_t> B) -> std::vector<uint64_t> {
     static thread_local std::vector<uint64_t> buffer;
 
-    size_type total_bits = (A.size() + B.size()) * 64;
+    std::size_t total_bits = (A.size() + B.size()) * 64;
     if (!(total_bits >= MIN_TOTAL_BITS))
         unreachable();
 
-    size_type m = std::bit_ceil(total_bits);
+    std::size_t m = std::bit_ceil(total_bits);
 
-    if (size_type buffer_required = ssa_size(m); buffer_required > buffer.size()) {
+    if (std::size_t buffer_required = ssa_size(m); buffer_required > buffer.size()) {
         buffer.clear();
         buffer.resize(buffer_required);
     }

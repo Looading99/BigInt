@@ -187,7 +187,7 @@ int main() {
 - `fast_pow(T base, uint32_t exponent)` — 快速幂模板
 - `abs(const T&)` — 绝对值（适用于 `BigInt` / `BigFloat`）
 - `print(const BigInt&, bool hex=false, bool direct=false)` — 流式输出代理，配合 `operator<<`：`std::cout << bigint::print(x, true)` 输出十六进制
-- `print(const BigFloat&, size_type dec_digits=0, bool direct=false)` — 同理，可指定小数位数
+- `print(const BigFloat&, std::size_t dec_digits=0, bool direct=false)` — 同理，可指定小数位数
 
 ## 实现说明
 

@@ -21,10 +21,10 @@
 using namespace bigint;
 
 template<typename lambda_P, typename lambda_Q, typename lambda_R>
-    requires std::is_invocable_r_v<BigInt, lambda_P, size_type>
-             && std::is_invocable_r_v<BigInt, lambda_Q, size_type>
-             && std::is_invocable_r_v<BigInt, lambda_R, size_type>
-auto bst(size_type r, lambda_P P, lambda_Q Q, lambda_R R) -> std::pair<BigFloat, BigFloat> {
+    requires std::is_invocable_r_v<BigInt, lambda_P, std::size_t>
+             && std::is_invocable_r_v<BigInt, lambda_Q, std::size_t>
+             && std::is_invocable_r_v<BigInt, lambda_R, std::size_t>
+auto bst(std::size_t r, lambda_P P, lambda_Q Q, lambda_R R) -> std::pair<BigFloat, BigFloat> {
     struct Entry {
         BigInt val_P;
         BigInt val_Q;
@@ -34,7 +34,7 @@ auto bst(size_type r, lambda_P P, lambda_Q Q, lambda_R R) -> std::pair<BigFloat,
 
     std::vector<Entry> segs;
     segs.reserve(std::bit_width(r));
-    for (size_type i = 1; i <= r; ++i) {
+    for (std::size_t i = 1; i <= r; ++i) {
         BigInt val_P(P(i)), val_Q(Q(i)), val_R(R(i));
         bool   moved = false;
         for (auto& seg : segs) {
@@ -77,19 +77,19 @@ auto bst(size_type r, lambda_P P, lambda_Q Q, lambda_R R) -> std::pair<BigFloat,
 auto main() -> int {
     init_thread_pool(8);
     // 示例：计算 e
-    auto P = [](size_type x) { return BigInt(1); };
-    auto Q = [](size_type x) { return BigInt(x); };
-    auto R = [](size_type x) { return BigInt(1); };
+    auto P = [](std::size_t x) { return BigInt(1); };
+    auto Q = [](std::size_t x) { return BigInt(x); };
+    auto R = [](std::size_t x) { return BigInt(1); };
 
-    size_type dec_digits = 0;
+    std::size_t dec_digits = 0;
     std::cout << "input target e precision(decimal digits): ";
     std::cin >> dec_digits;
     if (dec_digits < 2) {
         dec_digits = 2;
     }
 
-    double    cur_dec_precision = 0;
-    size_type r                 = 0;
+    double      cur_dec_precision = 0;
+    std::size_t r                 = 0;
     while (cur_dec_precision < static_cast<double>(dec_digits)) {
         ++r;
         cur_dec_precision += std::log10(r + 1);
@@ -99,7 +99,7 @@ auto main() -> int {
 
     auto [res_P, res_Q] = bst(r + 1, P, Q, R);
 
-    size_type inner_precision =
+    std::size_t inner_precision =
         std::ceil(static_cast<double>(dec_digits + 1) / DIGIT_BITS * std::log2(10));
     inner_precision = inner_precision * 3 / 2;  // 保证精度足够
 

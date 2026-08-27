@@ -196,12 +196,12 @@ inline auto fast_pow(__m128i base, uint32_t exponent) -> __m128i {
 constexpr auto steps = [] {
     std::array<std::array<std::array<uint32_t, NUM_PRIMES>, MAX_TRANSFORM_LEN_EXP>, 2> arr{};
     for (uint8_t I = 0; I < NUM_PRIMES; ++I) {
-        for (size_type level = 1; level <= MAX_TRANSFORM_LEN_EXP; ++level) {
+        for (std::size_t level = 1; level <= MAX_TRANSFORM_LEN_EXP; ++level) {
             arr[0][level - 1][I] = fast_pow(G[I], (P[I] - 1) >> level, P[I]);
             arr[1][level - 1][I] = fast_pow(inv_G[I], (P[I] - 1) >> level, P[I]);
         }
     }
-    for (size_type level = 1; level <= MAX_TRANSFORM_LEN_EXP; ++level) {
+    for (std::size_t level = 1; level <= MAX_TRANSFORM_LEN_EXP; ++level) {
         mont::vec_to_mont(arr[0][level - 1]);
         mont::vec_to_mont(arr[1][level - 1]);
     }
@@ -212,7 +212,7 @@ constexpr auto inv_pow_of_two = [] {
     std::array<std::array<uint32_t, NUM_PRIMES>, MAX_TRANSFORM_LEN_EXP> arr{};
     for (uint8_t I = 0; I < NUM_PRIMES; ++I) {
         arr[0][I] = modinv(2, P[I]);
-        for (size_type i = 1; i < MAX_TRANSFORM_LEN_EXP; ++i) {
+        for (std::size_t i = 1; i < MAX_TRANSFORM_LEN_EXP; ++i) {
             arr[i][I] = static_cast<uint64_t>(arr[i - 1][I]) * arr[0][I] % P[I];
         }
     }
@@ -222,7 +222,7 @@ constexpr auto inv_pow_of_two = [] {
     return arr;
 }();
 
-constexpr auto is_invalid_ntt_len(size_type n) -> bool {
+constexpr auto is_invalid_ntt_len(std::size_t n) -> bool {
     return n == 0 || (n & (n - 1)) != 0 || n > MAX_TRANSFORM_LEN;
 }
 
@@ -249,14 +249,14 @@ constexpr auto garner_merge(uint32_t c0, uint32_t c1, uint32_t c2) -> uint128_t 
 
 // 位逆序置换
 inline void bit_swap(std::span<uint32_t> v) {
-    const size_type n = v.size();
+    const std::size_t n = v.size();
     if (is_invalid_ntt_len(n)) {
         unreachable();
     }
-    for (size_type i = 1, j = n >> 1; i < n - 1; ++i) {
+    for (std::size_t i = 1, j = n >> 1; i < n - 1; ++i) {
         if (i < j)
             std::swap(v[i], v[j]);
-        size_type k = n >> 1;
+        std::size_t k = n >> 1;
         while (j >= k) {
             j -= k;
             k >>= 1;
@@ -267,18 +267,18 @@ inline void bit_swap(std::span<uint32_t> v) {
 
 // 多重位逆序置换，对每个下标模 NUM_PRIMES 同余类分别做位逆序置换
 inline void multi_bit_swap(std::span<uint32_t> v) {
-    size_type n = v.size();
+    std::size_t n = v.size();
     if (n % NUM_PRIMES != 0 || is_invalid_ntt_len(n / NUM_PRIMES)) {
         unreachable();
     }
     n /= NUM_PRIMES;
-    for (size_type i = 1, j = n >> 1; i < n - 1; ++i) {
+    for (std::size_t i = 1, j = n >> 1; i < n - 1; ++i) {
         if (i < j) {
             for (uint8_t u = 0; u < NUM_PRIMES; ++u) {
                 std::swap(v[NUM_PRIMES * i + u], v[NUM_PRIMES * j + u]);
             }
         }
-        size_type k = n >> 1;
+        std::size_t k = n >> 1;
         while (j >= k) {
             j -= k;
             k >>= 1;
@@ -288,9 +288,9 @@ inline void multi_bit_swap(std::span<uint32_t> v) {
 }
 
 // 把数组每个元素重复 k 次
-inline void copy_repeat(const Digits& v_in, size_type offset, size_type k, Digits& v_out) {
+inline void copy_repeat(const Digits& v_in, std::size_t offset, std::size_t k, Digits& v_out) {
     v_out.clear();
-    size_type new_size = (v_in.size() - offset) * k;
+    std::size_t new_size = (v_in.size() - offset) * k;
     v_out.reserve(new_size);
     if (new_size == 0) {
         return;
@@ -298,9 +298,9 @@ inline void copy_repeat(const Digits& v_in, size_type offset, size_type k, Digit
         v_out.insert(v_out.begin(), v_in.begin() + static_cast<int64_t>(offset), v_in.end());
         return;
     }
-    for (size_type i = offset; i < v_in.size(); ++i) {
+    for (std::size_t i = offset; i < v_in.size(); ++i) {
         uint32_t value = v_in[i];
-        for (size_type rep = 0; rep < k; ++rep) {
+        for (std::size_t rep = 0; rep < k; ++rep) {
             v_out.push_back(value);
         }
     }

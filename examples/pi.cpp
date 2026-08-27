@@ -10,7 +10,7 @@
 
 using namespace bigint;
 
-auto bst(size_type r) -> std::pair<BigInt, BigInt> {
+auto bst(std::size_t r) -> std::pair<BigInt, BigInt> {
     constexpr uint64_t Q0 = 10939058860032000ull;  // 640320^3 / 24
 
     struct Entry {
@@ -24,7 +24,7 @@ auto bst(size_type r) -> std::pair<BigInt, BigInt> {
     segs.reserve(std::bit_width(r));
 
     uint64_t p0 = 13591409;
-    for (size_type i = 1; i <= r; ++i) {
+    for (std::size_t i = 1; i <= r; ++i) {
         // Q(i) = Q0 * i^3
         BigInt val_Q(Q0);
         val_Q *= i;
@@ -81,14 +81,14 @@ auto bst(size_type r) -> std::pair<BigInt, BigInt> {
 
 auto main() -> int {
     init_thread_pool(8);
-    size_type dec_digits = 0;
+    std::size_t dec_digits = 0;
     std::cout << "input target pi precision(decimal digits): ";
     std::cin >> dec_digits;
     if (dec_digits < 2) {
         dec_digits = 2;
     }
 
-    auto inner_precision = static_cast<size_type>(
+    auto inner_precision = static_cast<std::size_t>(
         std::ceil(static_cast<double>(dec_digits + 1) / DIGIT_BITS * std::log2(10)));
     inner_precision = inner_precision * 3 / 2;  // 保证精度足够
 
@@ -104,7 +104,7 @@ auto main() -> int {
     BigFloat s(1.0 / std::sqrt(10005));
     {
         const BigFloat a(1.5);
-        size_type      cur_prec = 52 / DIGIT_BITS;
+        std::size_t    cur_prec = 52 / DIGIT_BITS;
         while (cur_prec < inner_precision) {
             cur_prec *= 2;
             auto ss = BigFloat::mul(s, s, cur_prec);

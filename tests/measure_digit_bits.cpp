@@ -28,7 +28,6 @@ using bigint::DIGIT_MASK;
 using bigint::mul::fft::MAX_DIGIT_BITS;
 using bigint::mul::fft::MAX_FFT_LEN;
 using bigint::mul::fft::MIN_DIGIT_BITS;
-using bigint::size_type;
 using Digits = std::vector<uint32_t>;
 using Vec64  = std::vector<uint64_t>;
 
@@ -43,8 +42,8 @@ static void normalize(Vec64& v) {
 static auto pack_digits_to_limbs(const Digits& d) -> Vec64 {
     Vec64             res;
     bigint::uint128_t tmp      = 0;
-    size_type         tmp_bits = 0;
-    size_type         i = 0, n = d.size();
+    std::size_t       tmp_bits = 0;
+    std::size_t       i = 0, n = d.size();
     while (i < n) {
         while (tmp_bits < 64 && i < n) {
             tmp |= static_cast<bigint::uint128_t>(d[i]) << tmp_bits;
@@ -62,11 +61,11 @@ static auto pack_digits_to_limbs(const Digits& d) -> Vec64 {
 }
 
 // 2^(B*m)-1 的 28 位数字表示（小端）：m 个 B 位数字全部取 2^B-1（最坏情况）
-static auto ones_digits28(int B, size_type m) -> Digits {
-    const size_type nbits = static_cast<size_type>(B) * m;
-    const size_type nd    = (nbits + DIGIT_BITS - 1) / DIGIT_BITS;
-    Digits          d(nd, DIGIT_MASK);
-    const size_type rem = nbits % DIGIT_BITS;
+static auto ones_digits28(int B, std::size_t m) -> Digits {
+    const std::size_t nbits = static_cast<std::size_t>(B) * m;
+    const std::size_t nd    = (nbits + DIGIT_BITS - 1) / DIGIT_BITS;
+    Digits            d(nd, DIGIT_MASK);
+    const std::size_t rem = nbits % DIGIT_BITS;
     if (rem != 0) {
         d.back() = (1u << rem) - 1;
     }
@@ -74,7 +73,7 @@ static auto ones_digits28(int B, size_type m) -> Digits {
 }
 
 // 最坏情况：两个 operand 各 m 个 2^B-1 数字相乘，强制 FFT(digit_bits=B) 与 NTT 参考比对
-static auto worst_case_ok(int B, size_type m) -> bool {
+static auto worst_case_ok(int B, std::size_t m) -> bool {
     const Digits a28   = ones_digits28(B, m);
     const Vec64  a64   = pack_digits_to_limbs(a28);
     Vec64        r_fft = bigint::mul::fft::mul(a64, a64, B);
@@ -85,19 +84,19 @@ static auto worst_case_ok(int B, size_type m) -> bool {
 }
 
 // 对给定 B 求最大通过 m（每 operand 的 B 位数字个数）：先探测上限，否则指数探测+二分
-static auto max_passing_m(int B) -> size_type {
-    const size_type m_cap = MAX_FFT_LEN / 2;  // 保证变换长度 N <= MAX_FFT_LEN
+static auto max_passing_m(int B) -> std::size_t {
+    const std::size_t m_cap = MAX_FFT_LEN / 2;  // 保证变换长度 N <= MAX_FFT_LEN
     if (worst_case_ok(B, m_cap)) {
         return m_cap;
     }
-    size_type lo = 1, hi = 1;
+    std::size_t lo = 1, hi = 1;
     while (hi <= m_cap && worst_case_ok(B, hi)) {
         lo = hi;
         hi = std::min(m_cap, hi * 2);
     }
-    size_type ans = lo, l = lo + 1, r = hi;
+    std::size_t ans = lo, l = lo + 1, r = hi;
     while (l <= r) {
-        const size_type mid = l + (r - l) / 2;
+        const std::size_t mid = l + (r - l) / 2;
         if (worst_case_ok(B, mid)) {
             ans = mid;
             l   = mid + 1;
@@ -111,16 +110,16 @@ static auto max_passing_m(int B) -> size_type {
 static void run_measure() {
     std::cout << "MAX_FFT_LEN=" << MAX_FFT_LEN << " (layer=" << std::countr_zero(MAX_FFT_LEN)
               << ")\n";
-    std::array<size_type, MAX_DIGIT_BITS + 1> max_total_bits{};
+    std::array<std::size_t, MAX_DIGIT_BITS + 1> max_total_bits{};
     std::cout << "--- per digit_bits max total bits (worst case) ---\n";
     for (int B = MIN_DIGIT_BITS; B <= MAX_DIGIT_BITS; ++B) {
-        const size_type m_max = max_passing_m(B);
-        const size_type t_max = 2 * m_max * static_cast<size_type>(B);
-        max_total_bits[B]     = t_max;
+        const std::size_t m_max = max_passing_m(B);
+        const std::size_t t_max = 2 * m_max * static_cast<std::size_t>(B);
+        max_total_bits[B]       = t_max;
         std::cout << "B=" << B << "  m_max=" << m_max << "  max_total_bits=" << t_max << "\n";
     }
     std::cout << "--- copy-paste table for mul.h ---\n";
-    std::cout << "constexpr std::array<size_type, MAX_DIGIT_BITS + 1> "
+    std::cout << "constexpr std::array<std::size_t, MAX_DIGIT_BITS + 1> "
                  "MAX_TOTAL_BITS_FOR_DIGIT_BITS = {\n";
     for (int i = 0; i <= MAX_DIGIT_BITS; ++i) {
         std::cout << "    " << max_total_bits[i];
@@ -138,9 +137,9 @@ static void run_regress() {
         return;
     }
     std::mt19937_64 rng(0x9e3779b97f4a7c15ull);
-    size_type       cases = 0, fails = 0;
+    std::size_t     cases = 0, fails = 0;
 
-    auto rand_digits = [&](size_type n) {
+    auto rand_digits = [&](std::size_t n) {
         Digits d(n);
         for (auto& x : d) {
             x = static_cast<uint32_t>(rng() & DIGIT_MASK);
@@ -161,13 +160,13 @@ static void run_regress() {
     };
 
     // fft::mul 自动选择，跨各规模（覆盖多个 digit_bits 区间；上限须在 FFT 容量 MAX_TOTAL_BITS 内）
-    for (size_type n : {200ull, 500ull, 1000ull, 3000ull, 8000ull, 20000ull, 25000ull}) {
+    for (std::size_t n : {200ull, 500ull, 1000ull, 3000ull, 8000ull, 20000ull, 25000ull}) {
         for (int rep = 0; rep < 4; ++rep) {
             check(rand_digits(n), rand_digits(n));
         }
     }
     // mul_digits 全链路（brute/FFT/NTT 分发）vs NTT 参考
-    for (size_type n : {100ull, 1000ull, 10000ull, 40000ull}) {
+    for (std::size_t n : {100ull, 1000ull, 10000ull, 40000ull}) {
         for (int rep = 0; rep < 3; ++rep) {
             Digits a = rand_digits(n), b = rand_digits(n);
             Digits r_mul       = bigint::mul::mul_digits(a, b);
@@ -184,7 +183,7 @@ static void run_regress() {
     }
     // 强制各 B 的随机输入正确性（小规模，各 B 均在其安全规模内）
     for (int B = MIN_DIGIT_BITS; B <= MAX_DIGIT_BITS; ++B) {
-        const size_type n = 64;
+        const std::size_t n = 64;
         for (int rep = 0; rep < 4; ++rep) {
             const Digits a = rand_digits(n), b = rand_digits(n);
             const Vec64  a64 = pack_digits_to_limbs(a), b64 = pack_digits_to_limbs(b);
@@ -203,7 +202,7 @@ static void run_regress() {
 }
 
 auto main(int argc, char** argv) -> int {
-    const std::span<char*> args(argv, static_cast<size_type>(argc));
+    const std::span<char*> args(argv, static_cast<std::size_t>(argc));
     const std::string      mode       = args.size() > 1 ? std::string(args[1]) : "";
     const bool             do_measure = mode.empty() || mode == "measure";
     const bool             do_regress = mode.empty() || mode == "regress";

@@ -21,7 +21,7 @@ namespace utils {
 inline auto add(std::span<const uint64_t> A, std::span<const uint64_t> B, std::span<uint64_t> C)
     -> bool {
     bool carry = false;
-    for (size_type i = 0; i < C.size(); ++i) {
+    for (std::size_t i = 0; i < C.size(); ++i) {
         uint64_t a = i < A.size() ? A[i] : 0, b = i < B.size() ? B[i] : 0;
         if (a == uint64_t(-1) && carry) {
             C[i] = b;
@@ -36,7 +36,7 @@ inline auto add(std::span<const uint64_t> A, std::span<const uint64_t> B, std::s
 inline auto sub(std::span<const uint64_t> A, std::span<const uint64_t> B, std::span<uint64_t> C)
     -> bool {
     bool borrow = false;
-    for (size_type i = 0; i < C.size(); ++i) {
+    for (std::size_t i = 0; i < C.size(); ++i) {
         uint64_t a = i < A.size() ? A[i] : 0, b = i < B.size() ? B[i] : 0;
         if (a == 0 && borrow) {
             C[i] = uint64_t(-1) - b;
@@ -49,7 +49,7 @@ inline auto sub(std::span<const uint64_t> A, std::span<const uint64_t> B, std::s
 
 // 计算 A = A + 1，返回是否进位
 inline auto add1(std::span<uint64_t> A) -> bool {
-    size_type i = 0;
+    std::size_t i = 0;
     for (; i < A.size(); ++i) {
         if (A[i] != uint64_t(-1)) {
             break;
@@ -77,15 +77,15 @@ template<class T> inline void remove_leading_zero(T& v) {
 
 namespace brute {
 
-constexpr size_type MAX_TOTAL_BITS = 2 * 128 * 64;
+constexpr std::size_t MAX_TOTAL_BITS = 2 * 128 * 64;
 
 inline auto mul(std::span<const uint64_t> A, std::span<const uint64_t> B) -> std::vector<uint64_t> {
     std::vector<uint64_t> res;
-    const size_type       n = A.size(), m = B.size();
+    const std::size_t     n = A.size(), m = B.size();
     res.resize(n + m);
-    for (size_type i = 0; i < n; ++i) {
-        uint64_t  carry = 0;
-        size_type j     = 0;
+    for (std::size_t i = 0; i < n; ++i) {
+        uint64_t    carry = 0;
+        std::size_t j     = 0;
         for (; j < m; ++j) {
             uint128_t t = static_cast<uint128_t>(A[i]) * B[j] + res[i + j] + carry;
             res[i + j]  = t;
@@ -120,7 +120,7 @@ constexpr int MAX_DIGIT_BITS = 20;
 // 2026-08-27：fft-rewrite 分支 dif_fft_mixed/dit_ifft_mixed + R2 双锚点后重测 B4-20
 // （默认 MIN=5，FFT 覆盖 ~84M bits；B4 极限在变换 2^26、B5 在 2^24，低于默认 MIN 的
 // 值仅供编译时降低 MIN 实验用）。
-constexpr std::array<size_type, MAX_DIGIT_BITS + 1> MAX_TOTAL_BITS_FOR_DIGIT_BITS = {
+constexpr std::array<std::size_t, MAX_DIGIT_BITS + 1> MAX_TOTAL_BITS_FOR_DIGIT_BITS = {
     0,          // digit_bits=0 （未使用）
     0,          // digit_bits=1 （未使用）
     0,          // digit_bits=2 （未使用）
@@ -143,7 +143,7 @@ constexpr std::array<size_type, MAX_DIGIT_BITS + 1> MAX_TOTAL_BITS_FOR_DIGIT_BIT
     19456,      // digit_bits=19
     20480,      // digit_bits=20
 };
-constexpr size_type MAX_TOTAL_BITS = MAX_TOTAL_BITS_FOR_DIGIT_BITS[MIN_DIGIT_BITS];
+constexpr std::size_t MAX_TOTAL_BITS = MAX_TOTAL_BITS_FOR_DIGIT_BITS[MIN_DIGIT_BITS];
 
 // 可选编译宏 BIGINT_FFT_MAX_FFT_LAYER：强制指定最大层数（基-2，0=由 MAX_TOTAL_BITS 推导）。
 // 用于精度测量 B < MIN 的容量（B 越小容量越大、所需层数越深）或限制内存上限。
@@ -156,14 +156,14 @@ constexpr size_type MAX_TOTAL_BITS = MAX_TOTAL_BITS_FOR_DIGIT_BITS[MIN_DIGIT_BIT
 // 数字个数 dA+dB-1 ≤ ceil(T/MIN_DIGIT_BITS) ≤ ceil(MAX_TOTAL_BITS/MIN_DIGIT_BITS)，
 // 故所需变换长度不超过 bit_ceil(ceil(MAX_TOTAL_BITS/MIN_DIGIT_BITS))，据此反推层数。
 // （新 FFT 为基-2 混合 radix：长度可为任意 2 的幂，含 2*4^k，故用 bit_ceil 而非 pow4ceil。）
-constexpr size_type MAX_FFT_LEN = BIGINT_FFT_MAX_FFT_LAYER > 0
-                                      ? (size_type(1) << BIGINT_FFT_MAX_FFT_LAYER)
-                                      : std::bit_ceil(
-                                            (MAX_TOTAL_BITS + MIN_DIGIT_BITS - 1) / MIN_DIGIT_BITS);
-constexpr size_type MAX_FFT_LAYER = std::countr_zero(MAX_FFT_LEN);
+constexpr std::size_t MAX_FFT_LEN   = BIGINT_FFT_MAX_FFT_LAYER > 0
+                                          ? (std::size_t(1) << BIGINT_FFT_MAX_FFT_LAYER)
+                                          : std::bit_ceil((MAX_TOTAL_BITS + MIN_DIGIT_BITS - 1)
+                                                          / MIN_DIGIT_BITS);
+constexpr std::size_t MAX_FFT_LAYER = std::countr_zero(MAX_FFT_LEN);
 
 // 根据输入总比特数查表，返回能保证精度的最大 digit_bits
-inline auto digit_bits_for_total_bits(size_type total_bits) -> int {
+inline auto digit_bits_for_total_bits(std::size_t total_bits) -> int {
     for (int b = MAX_DIGIT_BITS; b >= MIN_DIGIT_BITS; --b) {
         if (total_bits <= MAX_TOTAL_BITS_FOR_DIGIT_BITS[b]) {
             return b;
@@ -182,7 +182,7 @@ auto mul(std::span<const uint64_t> A, std::span<const uint64_t> B, int digit_bit
 
 namespace ntt {
 
-constexpr size_type MAX_TOTAL_BITS = (MAX_TRANSFORM_LEN - 2) * NTT_DIGIT_BITS;
+constexpr std::size_t MAX_TOTAL_BITS = (MAX_TRANSFORM_LEN - 2) * NTT_DIGIT_BITS;
 
 auto mul(std::span<const uint64_t> A, std::span<const uint64_t> B) -> std::vector<uint64_t>;
 
@@ -191,7 +191,7 @@ auto mul(std::span<const uint64_t> A, std::span<const uint64_t> B) -> std::vecto
 
 namespace ssa {
 
-constexpr size_type MIN_TOTAL_BITS = ntt::MAX_TOTAL_BITS + 1;
+constexpr std::size_t MIN_TOTAL_BITS = ntt::MAX_TOTAL_BITS + 1;
 
 auto mul(std::span<const uint64_t> A, std::span<const uint64_t> B) -> std::vector<uint64_t>;
 
@@ -200,7 +200,7 @@ auto mul(std::span<const uint64_t> A, std::span<const uint64_t> B) -> std::vecto
 
 inline auto _mul(std::span<const uint64_t> A, std::span<const uint64_t> B)
     -> std::vector<uint64_t> {
-    size_type total_bits = (A.size() + B.size()) * 64;
+    std::size_t total_bits = (A.size() + B.size()) * 64;
     if (total_bits <= brute::MAX_TOTAL_BITS) {
         return brute::mul(A, B);
     } else if (total_bits <= fft::MAX_TOTAL_BITS) {
@@ -213,15 +213,15 @@ inline auto _mul(std::span<const uint64_t> A, std::span<const uint64_t> B)
 }
 
 // 将两个数组（按照 output_precision ）相乘。必须保证输入数组非全0。
-inline auto mul_digits(const Digits& a, const Digits& b, size_type output_precision = 0,
+inline auto mul_digits(const Digits& a, const Digits& b, std::size_t output_precision = 0,
     int64_t* p_result_point_pos = nullptr) -> Digits {
     bool a_is_b = &a == &b;
 
-    size_type offset_a =
+    std::size_t offset_a =
         output_precision == 0 || a.size() <= output_precision ? 0 : a.size() - output_precision;
-    size_type offset_b =
+    std::size_t offset_b =
         output_precision == 0 || b.size() <= output_precision ? 0 : b.size() - output_precision;
-    size_type tail_zero_a = 0, tail_zero_b = 0;
+    std::size_t tail_zero_a = 0, tail_zero_b = 0;
     while (a[offset_a + tail_zero_a] == 0) {
         ++tail_zero_a;
     }
@@ -235,13 +235,13 @@ inline auto mul_digits(const Digits& a, const Digits& b, size_type output_precis
     offset_a += tail_zero_a;
     offset_b += tail_zero_b;
 
-    auto digits_to_vec64 = [](const Digits& x, size_type offset) -> std::vector<uint64_t> {
-        const size_type       n = x.size();
+    auto digits_to_vec64 = [](const Digits& x, std::size_t offset) -> std::vector<uint64_t> {
+        const std::size_t     n = x.size();
         std::vector<uint64_t> res;
-        res.reserve(ceil_div<size_type>((n - offset) * DIGIT_BITS, 64ull));
-        uint128_t tmp      = 0;
-        size_type tmp_bits = 0;
-        size_type i        = offset;
+        res.reserve(ceil_div<std::size_t>((n - offset) * DIGIT_BITS, 64ull));
+        uint128_t   tmp      = 0;
+        std::size_t tmp_bits = 0;
+        std::size_t i        = offset;
         while (i < n) {
             while (tmp_bits < 64 && i < n) {
                 tmp |= static_cast<uint128_t>(x[i]) << tmp_bits;
@@ -265,11 +265,11 @@ inline auto mul_digits(const Digits& a, const Digits& b, size_type output_precis
     auto C = _mul(A, a_is_b ? A : digits_to_vec64(b, offset_b));
 
     Digits res;
-    res.reserve(ceil_div<size_type>(C.size() * 64, DIGIT_BITS));
+    res.reserve(ceil_div<std::size_t>(C.size() * 64, DIGIT_BITS));
     {
-        uint128_t tmp      = 0;
-        size_type tmp_bits = 0;
-        size_type i        = 0;
+        uint128_t   tmp      = 0;
+        std::size_t tmp_bits = 0;
+        std::size_t i        = 0;
         while (i < C.size()) {
             if (tmp_bits < DIGIT_BITS) {
                 tmp |= static_cast<uint128_t>(C[i]) << tmp_bits;

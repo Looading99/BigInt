@@ -20,7 +20,8 @@
 
 namespace bigint {
 
-std::array<size_type, 2> BigInt::DEC_STRING_BRUTE_THRESHOLDS = DEC_STRING_BRUTE_THRESHOLDS_DEFAULT;
+std::array<std::size_t, 2> BigInt::DEC_STRING_BRUTE_THRESHOLDS =
+    DEC_STRING_BRUTE_THRESHOLDS_DEFAULT;
 
 BigInt::BigInt(const std::string& s, bool hex)
     : BigInt() {
@@ -39,7 +40,7 @@ BigInt::BigInt(const std::string& s, bool hex)
             }
             return arr;
         }();
-        size_type rend = 0, n = s.size();
+        std::size_t rend = 0, n = s.size();
         for (; rend < n; ++rend) {
             unsigned char c = s[rend];
             if (c == '-') {
@@ -48,8 +49,8 @@ BigInt::BigInt(const std::string& s, bool hex)
                 break;
             }
         }
-        uint32_t  digit = 0, offset = 0;
-        size_type i = n;
+        uint32_t    digit = 0, offset = 0;
+        std::size_t i = n;
         while (i > rend) {
             --i;
             uint32_t num = hex_map[static_cast<unsigned char>(s[i])];
@@ -68,7 +69,7 @@ BigInt::BigInt(const std::string& s, bool hex)
             data_.push_back(digit);
         }
     } else {  // dec
-        size_type i = 0, n = s.size();
+        std::size_t i = 0, n = s.size();
         for (; i < n; ++i) {
             unsigned char c = s[i];
             if (std::isdigit(c)) {
@@ -89,13 +90,13 @@ BigInt::BigInt(const std::string& s, bool hex)
     }
 }
 
-auto BigInt::convert_from_dec_string(const std::string& s, size_type start, size_type end)
-    -> std::pair<BigInt, size_type> {
+auto BigInt::convert_from_dec_string(const std::string& s, std::size_t start, std::size_t end)
+    -> std::pair<BigInt, std::size_t> {
     if (end - start < std::max(2ull, DEC_STRING_BRUTE_THRESHOLDS[0])) {
-        BigInt    res(0);
-        size_type len = 0;
-        uint64_t  cur = 0, base = 1;
-        for (size_type i = start; i < end; ++i) {
+        BigInt      res(0);
+        std::size_t len = 0;
+        uint64_t    cur = 0, base = 1;
+        for (std::size_t i = start; i < end; ++i) {
             unsigned char c = s[i];
             if (!std::isdigit(c)) {
                 continue;
@@ -127,18 +128,18 @@ auto BigInt::to_dec_string_brute() const -> std::string {
     if (is_zero())
         return "0";
 
-    constexpr size_type pow_max = floor_log(TEN, UINT64_MAX);
-    constexpr uint64_t  divisor = fast_pow(static_cast<uint64_t>(TEN), pow_max);
+    constexpr std::size_t pow_max = floor_log(TEN, UINT64_MAX);
+    constexpr uint64_t    divisor = fast_pow(static_cast<uint64_t>(TEN), pow_max);
 
     BigInt      temp = *this;
     std::string res;
     res.reserve(pow_max
-                + static_cast<size_type>(
+                + static_cast<std::size_t>(
                     std::ceil(static_cast<double>(data_.size()) * DIGIT_BITS * std::log10(2))));
 
     while (temp) {
         uint64_t rem = temp.unsigned_inplace_divmod(divisor);
-        for (size_type i = 0; i < pow_max && (rem != 0 || temp); ++i) {
+        for (std::size_t i = 0; i < pow_max && (rem != 0 || temp); ++i) {
             res.push_back(static_cast<char>(rem % TEN + '0'));
             rem /= TEN;
         }
@@ -184,13 +185,13 @@ void BigInt::print(std::ostream& output, bool hex, bool direct) const {
     }
 }
 
-void BigInt::print_dec(std::ostream& output, size_type len) const {
-    const size_type n = data_.size();
+void BigInt::print_dec(std::ostream& output, std::size_t len) const {
+    const std::size_t n = data_.size();
     if (n == 0) {
         unreachable();
     }
 
-    auto brute = [&](const BigInt& _num, size_type _len) {
+    auto brute = [&](const BigInt& _num, std::size_t _len) {
         auto res     = _num.to_dec_string_brute();
         auto it      = res.begin();
         auto res_len = res.size();
@@ -200,7 +201,7 @@ void BigInt::print_dec(std::ostream& output, size_type len) const {
             ++it;
         }
         if (_len > res_len) {
-            for (size_type i = 0; i < _len - res_len; ++i) {
+            for (std::size_t i = 0; i < _len - res_len; ++i) {
                 output.put('0');
             }
         }
@@ -214,13 +215,13 @@ void BigInt::print_dec(std::ostream& output, size_type len) const {
         return;
     }
 
-    std::vector<std::pair<BigInt, size_type>> stk;
+    std::vector<std::pair<BigInt, std::size_t>> stk;
     stk.reserve(std::bit_width(n));
 
-    auto divide_push = [&](const BigInt& _num, size_type _len) {
-        size_type estimate = std::ceil(
-                      static_cast<double>(_num.data_.size()) * DIGIT_BITS * std::log10(2)),
-                  k = estimate / 2;
+    auto divide_push = [&](const BigInt& _num, std::size_t _len) {
+        std::size_t estimate = std::ceil(
+                        static_cast<double>(_num.data_.size()) * DIGIT_BITS * std::log10(2)),
+                    k = estimate / 2;
 
         auto P      = get_pow_of_ten(k);
         auto [Q, R] = _num.divmod(P, RoundMode::Truncate);
@@ -234,7 +235,7 @@ void BigInt::print_dec(std::ostream& output, size_type len) const {
     while (!stk.empty()) {
         auto [cur_num, cur_len] = std::move(stk.back());
         stk.pop_back();
-        const size_type cn = cur_num.data_.size();
+        const std::size_t cn = cur_num.data_.size();
         if (cn == 0) {
             unreachable();
         }
@@ -254,9 +255,9 @@ void BigInt::print_hex(std::ostream& output) const {
     if (is_neg_) {
         output.put('-');
     };
-    size_type n = data_.size();
+    std::size_t n = data_.size();
     output << std::hex << data_.back() << std::setfill('0');
-    size_type i = n - 1;
+    std::size_t i = n - 1;
     while (i) {
         --i;
         output << std::setw(DIGIT_BITS / 4) << data_[i];
@@ -264,8 +265,8 @@ void BigInt::print_hex(std::ostream& output) const {
     output << std::dec << std::setfill(' ');
 }
 
-auto BigInt::remove_leading_zero() -> size_type {
-    size_type i = data_.size();
+auto BigInt::remove_leading_zero() -> std::size_t {
+    std::size_t i = data_.size();
     if (i == 0) {
         unreachable();
     }
@@ -285,14 +286,14 @@ auto BigInt::remove_leading_zero() -> size_type {
 }
 
 auto BigInt::compare_abs(const BigInt& a, const BigInt& b) noexcept -> std::strong_ordering {
-    const size_type n = a.data_.size(), m = b.data_.size();
+    const std::size_t n = a.data_.size(), m = b.data_.size();
     if (n == 0 || m == 0) {
         unreachable();
     }
     if (auto cmp = n <=> m; cmp != 0) {
         return cmp;
     }
-    size_type i = n;
+    std::size_t i = n;
     while (i > 0) {
         --i;
         if (auto cmp = a.data_[i] <=> b.data_[i]; cmp != 0) {
@@ -303,7 +304,7 @@ auto BigInt::compare_abs(const BigInt& a, const BigInt& b) noexcept -> std::stro
 }
 
 void BigInt::unsigned_self_inc_or_dec(bool is_inc) {
-    size_type n = data_.size(), i = 0;
+    std::size_t n = data_.size(), i = 0;
     if (n == 0) {
         unreachable();
     }
@@ -377,7 +378,7 @@ auto BigInt::trim_all(bool is_borrow) -> uint32_t {
 }
 
 void BigInt::inplace_add_or_sub(const BigInt& b, bool is_sub) {
-    const size_type n = b.data_.size();
+    const std::size_t n = b.data_.size();
     if (data_.size() == 0 || n == 0) {
         unreachable();
     }
@@ -385,7 +386,7 @@ void BigInt::inplace_add_or_sub(const BigInt& b, bool is_sub) {
         data_.resize(n);
     }
     if (is_neg_ ^ b.is_neg_ ^ is_sub) {
-        for (size_type i = 0; i < n; ++i) {
+        for (std::size_t i = 0; i < n; ++i) {
             data_[i] -= b.data_[i];
         }
         remove_leading_zero();
@@ -399,7 +400,7 @@ void BigInt::inplace_add_or_sub(const BigInt& b, bool is_sub) {
         trim_all(true);
         remove_leading_zero();
     } else {
-        for (size_type i = 0; i < n; ++i) {
+        for (std::size_t i = 0; i < n; ++i) {
             data_[i] += b.data_[i];
         }
         uint32_t carry = trim_all(false);
@@ -417,8 +418,8 @@ void BigInt::inplace_add_or_sub(uint64_t b, bool is_sub) {
     if (b == 0)
         return;
     data_.resize(
-        std::max(data_.size(), static_cast<size_type>(std::bit_width(b) / DIGIT_BITS) + 1));
-    size_type i = 0;
+        std::max(data_.size(), static_cast<std::size_t>(std::bit_width(b) / DIGIT_BITS) + 1));
+    std::size_t i = 0;
     if (is_neg_ ^ is_sub) {
         while (b) {
             data_[i] -= static_cast<uint32_t>(b) & DIGIT_MASK;
@@ -491,8 +492,8 @@ auto BigInt::unsigned_inplace_divmod(uint64_t b) -> uint64_t {
     if (b == 0) {
         throw std::domain_error("division by zero");
     }
-    uint128_t rem = 0;
-    size_type i   = data_.size();
+    uint128_t   rem = 0;
+    std::size_t i   = data_.size();
     while (i) {
         --i;
         rem      = (rem << DIGIT_BITS) + data_[i];
@@ -512,9 +513,9 @@ void BigInt::shift_left(Digits& v, uint64_t offset) {
         v.insert(v.begin(), idx_offset, 0);
         return;
     }
-    const size_type new_size = v.size() + idx_offset + 1;
+    const std::size_t new_size = v.size() + idx_offset + 1;
     v.resize(new_size);
-    for (size_type i = new_size - 1; i > idx_offset; --i) {
+    for (std::size_t i = new_size - 1; i > idx_offset; --i) {
         v[i] = ((v[i - idx_offset] << bit_offset)
                    | (v[i - idx_offset - 1] >> (DIGIT_BITS - bit_offset)))
                & DIGIT_MASK;
@@ -537,8 +538,8 @@ void BigInt::shift_right(Digits& v, uint64_t offset) {
         v.erase(v.begin(), v.begin() + static_cast<int64_t>(idx_offset));
         return;
     }
-    const size_type new_size = v.size() - idx_offset;
-    for (size_type i = 0; i < new_size - 1; ++i) {
+    const std::size_t new_size = v.size() - idx_offset;
+    for (std::size_t i = 0; i < new_size - 1; ++i) {
         v[i] = ((v[i + idx_offset] >> bit_offset)
                    | (v[i + idx_offset + 1] << (DIGIT_BITS - bit_offset)))
                & DIGIT_MASK;
@@ -555,14 +556,14 @@ auto BigInt::operator&=(const BigInt& b) -> BigInt& {
         reset();
         return *this;
     }
-    const size_type n = data_.size(), m = b.data_.size();
+    const std::size_t n = data_.size(), m = b.data_.size();
     if (n == 0 || m == 0) {
         unreachable();
     }
     if (n > m) {
         data_.resize(m);
     }
-    for (size_type i = 0; i < std::min(n, m); ++i) {
+    for (std::size_t i = 0; i < std::min(n, m); ++i) {
         data_[i] &= b.data_[i];
     }
     remove_leading_zero();
@@ -576,14 +577,14 @@ auto BigInt::operator|=(const BigInt& b) -> BigInt& {
     } else if (b.is_zero()) {
         return *this;
     }
-    const size_type n = data_.size(), m = b.data_.size();
+    const std::size_t n = data_.size(), m = b.data_.size();
     if (n == 0 || m == 0) {
         unreachable();
     }
     if (n < m) {
         data_.insert(data_.end(), b.data_.begin() + static_cast<int64_t>(n), b.data_.end());
     }
-    for (size_type i = 0; i < std::min(n, m); ++i) {
+    for (std::size_t i = 0; i < std::min(n, m); ++i) {
         data_[i] |= b.data_[i];
     }
     remove_leading_zero();
@@ -597,21 +598,21 @@ auto BigInt::operator^=(const BigInt& b) -> BigInt& {
     } else if (b.is_zero()) {
         return *this;
     }
-    const size_type n = data_.size(), m = b.data_.size();
+    const std::size_t n = data_.size(), m = b.data_.size();
     if (n == 0 || m == 0) {
         unreachable();
     }
     if (n < m) {
         data_.insert(data_.end(), b.data_.begin() + static_cast<int64_t>(n), b.data_.end());
     }
-    for (size_type i = 0; i < std::min(n, m); ++i) {
+    for (std::size_t i = 0; i < std::min(n, m); ++i) {
         data_[i] ^= b.data_[i];
     }
     remove_leading_zero();
     return *this;
 }
 
-auto BigInt::bitwise_not(size_type len) -> BigInt& {
+auto BigInt::bitwise_not(std::size_t len) -> BigInt& {
     if (len) {
         data_.resize(len);
     }
@@ -630,11 +631,11 @@ auto BigInt::divmod(const BigInt& b, RoundMode mode, bool check) const
     if (is_zero()) {
         return {BigInt(0), BigInt(0)};
     }
-    constexpr size_type PROTECT_PRECISION = 16;
+    constexpr std::size_t PROTECT_PRECISION = 16;
 
     auto& a = *this;
 
-    const size_type precision = a.data_.size() + PROTECT_PRECISION;
+    const std::size_t precision = a.data_.size() + PROTECT_PRECISION;
 
     BigInt Q(BigFloat::mul(BigFloat(a), BigFloat(b).reciprocal(precision), precision), mode);
 
@@ -752,7 +753,7 @@ auto BigFloat::to_double() const -> double {
         mantissa_bits = shl(data_.back() & ((1 << (highest_bit_width - 1)) - 1), offset);
     }
 
-    size_type i = data_.size() - 1;
+    std::size_t i = data_.size() - 1;
 
     while (offset > 0 && i > 0) {
         offset -= DIGIT_BITS;
@@ -792,8 +793,8 @@ void BigFloat::shift_right(Digits& v, uint32_t offset) {
     if (v.size() == 0 || offset >= DIGIT_BITS) {
         unreachable();
     }
-    const size_type n = v.size();
-    for (size_type i = 0; i < n - 1; ++i) {
+    const std::size_t n = v.size();
+    for (std::size_t i = 0; i < n - 1; ++i) {
         v[i] = ((v[i] >> offset) | (v[i + 1] << (DIGIT_BITS - offset))) & DIGIT_MASK;
     }
     v[n - 1] >>= offset;
@@ -804,15 +805,15 @@ void BigFloat::shift_left(Digits& v, uint32_t offset) {
         unreachable();
     }
     v.push_back(0);
-    const size_type n = v.size();
-    for (size_type i = n - 1; i > 0; --i) {
+    const std::size_t n = v.size();
+    for (std::size_t i = n - 1; i > 0; --i) {
         v[i] = ((v[i] << offset) | (v[i - 1] >> (DIGIT_BITS - offset))) & DIGIT_MASK;
     }
     v[0] = (v[0] << offset) & DIGIT_MASK;
 }
 
-auto BigFloat::remove_leading_zero() -> size_type {
-    size_type i = data_.size();
+auto BigFloat::remove_leading_zero() -> std::size_t {
+    std::size_t i = data_.size();
     if (i == 0) {
         unreachable();
     }
@@ -831,7 +832,7 @@ auto BigFloat::remove_leading_zero() -> size_type {
     }
 }
 
-auto BigFloat::remove_tail_zero() -> size_type {
+auto BigFloat::remove_tail_zero() -> std::size_t {
     if (is_zero()) {
         return 1;
     }
@@ -969,7 +970,7 @@ template<typename C, typename T> void BigFloat::unsigned_inplace_mul(T b) {
     }
 }
 
-void BigFloat::print(std::ostream& output, size_type dec_digits, bool direct) const {
+void BigFloat::print(std::ostream& output, std::size_t dec_digits, bool direct) const {
     std::optional<std::stringstream> buffer;
     std::ostream&                    out = direct ? output : buffer.emplace();
 
@@ -1008,7 +1009,7 @@ void BigFloat::print(std::ostream& output, size_type dec_digits, bool direct) co
         dec_part = BigInt(bf_dec_part, RoundMode::RoundHalfUp);
         // 快速判断 dec_part 是否恰好等于 10^dec_digits
         auto check = [&]() -> bool {
-            size_type tail_zero_cnt = 0;
+            std::size_t tail_zero_cnt = 0;
             for (auto num : dec_part.data_) {
                 if (num != 0) {
                     tail_zero_cnt += std::countr_zero(num);
@@ -1041,7 +1042,7 @@ void BigFloat::print(std::ostream& output, size_type dec_digits, bool direct) co
     }
 }
 
-auto BigFloat::reciprocal(size_type precision) const -> BigFloat {
+auto BigFloat::reciprocal(std::size_t precision) const -> BigFloat {
     if (data_.size() == 0) {
         unreachable();
     }
@@ -1058,8 +1059,8 @@ auto BigFloat::reciprocal(size_type precision) const -> BigFloat {
 
     BigFloat b(*this >> exponent);
     b.remove_tail_zero();
-    BigFloat  x(1 / b.to_double());
-    size_type cur_precision = DOUBLE_MANTISSA_LEN / DIGIT_BITS;
+    BigFloat    x(1 / b.to_double());
+    std::size_t cur_precision = DOUBLE_MANTISSA_LEN / DIGIT_BITS;
     // 牛顿迭代：x = x + x * (1 - b * x)
     const BigFloat one(1);
     while (cur_precision < precision) {
@@ -1097,7 +1098,7 @@ static void _round(RoundMode mode, Digits& v, bool is_neg, int64_t round_idx) {
     if (!increase_abs) {
         return;
     }
-    size_type i = 0, n = v.size();
+    std::size_t i = 0, n = v.size();
     for (; i < n; ++i) {
         if (v[i] != DIGIT_MASK) {
             ++v[i];

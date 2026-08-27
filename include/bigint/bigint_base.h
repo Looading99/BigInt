@@ -33,8 +33,6 @@ constexpr int DOUBLE_EXPONENT_BIAS = 1023;
 using uint128_t = __uint128_t;
 using int128_t  = __int128_t;
 
-using size_type = std::size_t;
-
 // 编译期常量 0
 using Literal_zero = decltype(nullptr);
 
@@ -111,9 +109,9 @@ constexpr auto fast_pow(uint32_t base, uint32_t exponent, uint32_t mod) -> uint3
     return res;
 }
 
-constexpr auto floor_log(uint64_t base, uint64_t x) -> size_type {
-    size_type n     = 0;
-    uint64_t  power = 1;
+constexpr auto floor_log(uint64_t base, uint64_t x) -> std::size_t {
+    std::size_t n     = 0;
+    uint64_t    power = 1;
     while (power <= x / base) {
         power *= base;
         ++n;

@@ -63,7 +63,7 @@ struct alignas(32) LayerTwiddles {
 alignas(32) static const auto layer_twiddles = [] {
     // 基-4 层最大层数 = MAX_FFT_LAYER/2（基-2 层数 MAX_FFT_LAYER = log2(MAX_FFT_LEN)）
     std::array<LayerTwiddles, MAX_FFT_LAYER / 2 + 1> res{};
-    for (size_type layer = 2; layer <= MAX_FFT_LAYER / 2; ++layer) {
+    for (std::size_t layer = 2; layer <= MAX_FFT_LAYER / 2; ++layer) {
         auto&  twl   = res[layer];
         double theta = 2 * std::numbers::pi / static_cast<double>(1ull << (layer * 2));
         for (int t = 0; t < 3; ++t) {
@@ -88,7 +88,7 @@ struct alignas(32) R2LayerTwiddles {
 // 索引 (layer-1)/2，表大小 (MAX_FFT_LAYER+1)/2
 alignas(32) static const auto r2_odd_layer_twiddles = [] {
     std::array<R2LayerTwiddles, (MAX_FFT_LAYER + 1) / 2> res{};
-    for (size_type layer = 5; layer <= MAX_FFT_LAYER; layer += 2) {
+    for (std::size_t layer = 5; layer <= MAX_FFT_LAYER; layer += 2) {
         auto&  twl   = res[(layer - 1) / 2];
         double theta = 2 * std::numbers::pi / static_cast<double>(1ull << layer);
         twl.seed_re  = {1.0, std::cos(theta), std::cos(2 * theta), std::cos(3 * theta)};
@@ -130,7 +130,7 @@ template<bool is_dif> static void fft_basecase(std::span<double> v_re, std::span
         _v_re[3] = nD_re, _v_im[3] = nD_im;
     };
 
-    const size_type n = v_re.size();
+    const std::size_t n = v_re.size();
     if (n != v_im.size())
         unreachable();
     switch (n) {
@@ -181,23 +181,23 @@ template<bool is_dif> static void fft_basecase(std::span<double> v_re, std::span
 }
 
 static void dif_fft_mixed(std::span<double> v_re, std::span<double> v_im) {
-    const size_type n = v_re.size();
+    const std::size_t n = v_re.size();
     if (n != v_im.size() || n == 0 || std::popcount(n) != 1)
         unreachable();
     if (n <= 8) {
         fft_basecase<true>(v_re, v_im);
         return;
     }
-    size_type len = n;
+    std::size_t len = n;
     if (std::countr_zero(n) % 2) {
-        size_type     half    = n / 2;
-        size_type     i_mid   = half / 2;  // 中间组起始位置 = n/4
+        std::size_t   half    = n / 2;
+        std::size_t   i_mid   = half / 2;  // 中间组起始位置 = n/4
         auto&         twl     = r2_odd_layer_twiddles[(std::countr_zero(n) - 1) / 2];
         const __m256d seed_re = m_load(twl.seed_re.data()), seed_im = m_load(twl.seed_im.data());
         const __m256d step_re = _mm256_set1_pd(twl.step_re), step_im = _mm256_set1_pd(twl.step_im);
         // 前半从 seed_first 递推；后半复用 seed_first 乘 -i 得中间组种子（ω^{n/4}=-i，精确），
         // 两段最坏递推步数均 n/16 减半，缓解误差累积，且不额外存储
-        for (size_type seg = 0; seg < 2; ++seg) {
+        for (std::size_t seg = 0; seg < 2; ++seg) {
             __m256d w_re, w_im;
             if (seg == 0) {
                 w_re = seed_re;
@@ -206,8 +206,8 @@ static void dif_fft_mixed(std::span<double> v_re, std::span<double> v_im) {
                 w_re = seed_im;
                 w_im = _mm256_xor_pd(seed_re, _mm256_set1_pd(-0.0));
             }
-            const size_type i0 = seg == 1 ? i_mid : 0, i1 = seg == 1 ? half : i_mid;
-            for (size_type i = i0; i < i1; i += 4) {
+            const std::size_t i0 = seg == 1 ? i_mid : 0, i1 = seg == 1 ? half : i_mid;
+            for (std::size_t i = i0; i < i1; i += 4) {
                 __m256d A_re = m_load(&v_re[i]), B_re = m_load(&v_re[half + i]);
                 __m256d A_im = m_load(&v_im[i]), B_im = m_load(&v_im[half + i]);
                 __m256d nA_re = m_add(A_re, B_re), nA_im = m_add(A_im, B_im);
@@ -220,11 +220,11 @@ static void dif_fft_mixed(std::span<double> v_re, std::span<double> v_im) {
         }
         len = half;
     }
-    for (size_type layer = std::countr_zero(len) / 2, sub = len / 4; layer > 1; --layer) {
-        for (size_type i = 0; i < n; i += len) {
-            for (size_type m = 0; m < sub; m += 4) {
-                size_type idx_A = i + m, idx_B = idx_A + sub, idx_C = idx_B + sub,
-                          idx_D = idx_C + sub;
+    for (std::size_t layer = std::countr_zero(len) / 2, sub = len / 4; layer > 1; --layer) {
+        for (std::size_t i = 0; i < n; i += len) {
+            for (std::size_t m = 0; m < sub; m += 4) {
+                std::size_t idx_A = i + m, idx_B = idx_A + sub, idx_C = idx_B + sub,
+                            idx_D = idx_C + sub;
 
                 __m256d A_re = m_load(&v_re[idx_A]), B_re = m_load(&v_re[idx_B]),
                         C_re = m_load(&v_re[idx_C]), D_re = m_load(&v_re[idx_D]);
@@ -252,13 +252,13 @@ static void dif_fft_mixed(std::span<double> v_re, std::span<double> v_im) {
             }
         }
         const auto& twl = layer_twiddles[layer];
-        for (size_type i = 0; i < n; i += len) {
-            for (size_type t = 0; t < 3; ++t) {
+        for (std::size_t i = 0; i < n; i += len) {
+            for (std::size_t t = 0; t < 3; ++t) {
                 __m256d w_re = m_load(twl.seed_re[t].data()), w_im = m_load(twl.seed_im[t].data());
-                __m256d step_re     = _mm256_set1_pd(twl.step_re[t]),
-                        step_im     = _mm256_set1_pd(twl.step_im[t]);
-                const size_type pos = i + (t + 1) * sub;
-                for (size_type m = 0; m < sub; m += 4) {
+                __m256d step_re       = _mm256_set1_pd(twl.step_re[t]),
+                        step_im       = _mm256_set1_pd(twl.step_im[t]);
+                const std::size_t pos = i + (t + 1) * sub;
+                for (std::size_t m = 0; m < sub; m += 4) {
                     double *p_re = &v_re[pos + m], *p_im = &v_im[pos + m];
                     __m256d res_re, res_im;
                     complex_mul_simd(m_load(p_re), m_load(p_im), w_re, w_im, res_re, res_im);
@@ -269,8 +269,8 @@ static void dif_fft_mixed(std::span<double> v_re, std::span<double> v_im) {
         }
         len = sub, sub /= 4;
     }
-    for (size_type i = 0; i < n; i += 4 * 4) {
-        size_type idx_A = i + 4 * 0, idx_B = i + 4 * 1, idx_C = i + 4 * 2, idx_D = i + 4 * 3;
+    for (std::size_t i = 0; i < n; i += 4 * 4) {
+        std::size_t idx_A = i + 4 * 0, idx_B = i + 4 * 1, idx_C = i + 4 * 2, idx_D = i + 4 * 3;
 
         __m256d A_re = m_load(&v_re[idx_A]), B_re = m_load(&v_re[idx_B]),
                 C_re = m_load(&v_re[idx_C]), D_re = m_load(&v_re[idx_D]);
@@ -299,15 +299,15 @@ static void dif_fft_mixed(std::span<double> v_re, std::span<double> v_im) {
 }
 
 static void dit_ifft_mixed(std::span<double> v_re, std::span<double> v_im) {
-    const size_type n = v_re.size();
+    const std::size_t n = v_re.size();
     if (n != v_im.size() || n == 0 || std::popcount(n) != 1)
         unreachable();
     if (n <= 8) {
         fft_basecase<false>(v_re, v_im);
         return;
     }
-    for (size_type i = 0; i < n; i += 4 * 4) {
-        size_type idx_A = i + 4 * 0, idx_B = i + 4 * 1, idx_C = i + 4 * 2, idx_D = i + 4 * 3;
+    for (std::size_t i = 0; i < n; i += 4 * 4) {
+        std::size_t idx_A = i + 4 * 0, idx_B = i + 4 * 1, idx_C = i + 4 * 2, idx_D = i + 4 * 3;
 
         __m256d A_re = m_load(&v_re[idx_A]), B_re = m_load(&v_re[idx_B]),
                 C_re = m_load(&v_re[idx_C]), D_re = m_load(&v_re[idx_D]);
@@ -333,17 +333,17 @@ static void dit_ifft_mixed(std::span<double> v_re, std::span<double> v_im) {
         m_store(&v_re[idx_C], nC_re), m_store(&v_im[idx_C], nC_im);
         m_store(&v_re[idx_D], nD_re), m_store(&v_im[idx_D], nD_im);
     }
-    const size_type total_r4_layers = std::countr_zero(n) / 2;
-    for (size_type layer = 2, len = 16, sub = 4; layer <= total_r4_layers; ++layer) {
+    const std::size_t total_r4_layers = std::countr_zero(n) / 2;
+    for (std::size_t layer = 2, len = 16, sub = 4; layer <= total_r4_layers; ++layer) {
         const auto& twl = layer_twiddles[layer];
-        for (size_type i = 0; i < n; i += len) {
-            for (size_type t = 0; t < 3; ++t) {
+        for (std::size_t i = 0; i < n; i += len) {
+            for (std::size_t t = 0; t < 3; ++t) {
                 __m256d w_re = m_load(twl.seed_re[t].data()),
                         w_im = _mm256_xor_pd(m_load(twl.seed_im[t].data()), _mm256_set1_pd(-0.0));
-                __m256d step_re     = _mm256_set1_pd(twl.step_re[t]),
-                        step_im     = _mm256_set1_pd(-twl.step_im[t]);
-                const size_type pos = i + (t + 1) * sub;
-                for (size_type m = 0; m < sub; m += 4) {
+                __m256d step_re       = _mm256_set1_pd(twl.step_re[t]),
+                        step_im       = _mm256_set1_pd(-twl.step_im[t]);
+                const std::size_t pos = i + (t + 1) * sub;
+                for (std::size_t m = 0; m < sub; m += 4) {
                     double *p_re = &v_re[pos + m], *p_im = &v_im[pos + m];
                     __m256d res_re, res_im;
                     complex_mul_simd(m_load(p_re), m_load(p_im), w_re, w_im, res_re, res_im);
@@ -352,10 +352,10 @@ static void dit_ifft_mixed(std::span<double> v_re, std::span<double> v_im) {
                 }
             }
         }
-        for (size_type i = 0; i < n; i += len) {
-            for (size_type m = 0; m < sub; m += 4) {
-                size_type idx_A = i + m, idx_B = idx_A + sub, idx_C = idx_B + sub,
-                          idx_D = idx_C + sub;
+        for (std::size_t i = 0; i < n; i += len) {
+            for (std::size_t m = 0; m < sub; m += 4) {
+                std::size_t idx_A = i + m, idx_B = idx_A + sub, idx_C = idx_B + sub,
+                            idx_D = idx_C + sub;
 
                 __m256d A_re = m_load(&v_re[idx_A]), B_re = m_load(&v_re[idx_B]),
                         C_re = m_load(&v_re[idx_C]), D_re = m_load(&v_re[idx_D]);
@@ -385,12 +385,12 @@ static void dit_ifft_mixed(std::span<double> v_re, std::span<double> v_im) {
         sub = len, len *= 4;
     }
     if (std::countr_zero(n) % 2) {  // n = 2*4^k
-        size_type     half    = n / 2;
-        size_type     i_mid   = half / 2;
+        std::size_t   half    = n / 2;
+        std::size_t   i_mid   = half / 2;
         auto&         twl     = r2_odd_layer_twiddles[(std::countr_zero(n) - 1) / 2];
         const __m256d seed_re = m_load(twl.seed_re.data()), seed_im = m_load(twl.seed_im.data());
         const __m256d step_re = _mm256_set1_pd(twl.step_re), step_im = _mm256_set1_pd(-twl.step_im);
-        for (size_type seg = 0; seg < 2; ++seg) {
+        for (std::size_t seg = 0; seg < 2; ++seg) {
             __m256d w_re, w_im;
             if (seg == 0) {
                 w_re = seed_re;
@@ -399,8 +399,8 @@ static void dit_ifft_mixed(std::span<double> v_re, std::span<double> v_im) {
                 w_re = seed_im;
                 w_im = seed_re;
             }
-            const size_type i0 = seg == 1 ? i_mid : 0, i1 = seg == 1 ? half : i_mid;
-            for (size_type i = i0; i < i1; i += 4) {
+            const std::size_t i0 = seg == 1 ? i_mid : 0, i1 = seg == 1 ? half : i_mid;
+            for (std::size_t i = i0; i < i1; i += 4) {
                 __m256d A_re = m_load(&v_re[i]), B_re = m_load(&v_re[half + i]);
                 __m256d A_im = m_load(&v_im[i]), B_im = m_load(&v_im[half + i]);
                 complex_mul_simd(B_re, B_im, w_re, w_im, B_re, B_im);
@@ -449,7 +449,7 @@ auto mul(std::span<const uint64_t> A, std::span<const uint64_t> B, int digit_bit
     -> std::vector<uint64_t> {
     bool a_is_b = A.data() == B.data();
 
-    size_type tail_zero_A = 0, tail_zero_B = 0, leading_zero_A = 0, leading_zero_B = 0;
+    std::size_t tail_zero_A = 0, tail_zero_B = 0, leading_zero_A = 0, leading_zero_B = 0;
     for (auto digit : A) {
         if (digit != 0)
             break;
@@ -491,8 +491,9 @@ auto mul(std::span<const uint64_t> A, std::span<const uint64_t> B, int digit_bit
     }
 
     std::vector<double, AlignedAllocator<double>> v_re, v_im;
-    size_type fft_new_size = std::bit_ceil(ceil_div<size_type>(A.size() * 64, digit_bits)
-                                           + ceil_div<size_type>(B.size() * 64, digit_bits) - 1);
+    std::size_t                                   fft_new_size =
+        std::bit_ceil(ceil_div<std::size_t>(A.size() * 64, digit_bits)
+                      + ceil_div<std::size_t>(B.size() * 64, digit_bits) - 1);
     v_re.reserve(fft_new_size);
     vec64_to_double(A, v_re, digit_bits);
     v_re.resize(fft_new_size);
@@ -505,7 +506,7 @@ auto mul(std::span<const uint64_t> A, std::span<const uint64_t> B, int digit_bit
     }
 
     dif_fft_mixed(v_re, v_im);
-    for (size_type i = 0; i < fft_new_size; i += 4) {
+    for (std::size_t i = 0; i < fft_new_size; i += 4) {
         __m256d re = m_load(&v_re[i]), im = m_load(&v_im[i]);
         complex_square_simd(re, im, re, im);
         m_store(&v_re[i], re), m_store(&v_im[i], im);
@@ -514,7 +515,7 @@ auto mul(std::span<const uint64_t> A, std::span<const uint64_t> B, int digit_bit
 
     std::vector<uint64_t> res;
     res.resize(tail_zero_A + tail_zero_B);
-    size_type leading_zero_res = 0;
+    std::size_t leading_zero_res = 0;
     for (auto digit : std::views::reverse(v_im)) {
         if (std::llround(digit) != 0) {
             break;
@@ -523,7 +524,7 @@ auto mul(std::span<const uint64_t> A, std::span<const uint64_t> B, int digit_bit
     }
     uint128_t    digit          = 0;
     int          cur_digit_bits = 0;
-    size_type    i = 0, max_i = v_im.size() - leading_zero_res;
+    std::size_t  i = 0, max_i = v_im.size() - leading_zero_res;
     const double scale = 1.0 / static_cast<double>(2 * fft_new_size);
     while (i < max_i) {
         while (cur_digit_bits < 64 && i < max_i) {
