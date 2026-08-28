@@ -65,8 +65,14 @@ endif()
 
 # ---- 测试程序 ----
 if(BUILD_TESTS)
+    enable_testing()
+    add_executable(test_bigint tests/test_bigint.cpp)
+    target_link_libraries(test_bigint PRIVATE bigint::bigint)
+    add_test(NAME bigint_core COMMAND $<TARGET_FILE:test_bigint>)
+
     add_executable(test_fft_digit_bits tests/measure_digit_bits.cpp)
     target_link_libraries(test_fft_digit_bits PRIVATE bigint::bigint)
+    add_test(NAME bigint_mul_regress COMMAND $<TARGET_FILE:test_fft_digit_bits> regress)
 endif()
 
 # ---- 安装与导出（find_package(bigint CONFIG) 支持） ----

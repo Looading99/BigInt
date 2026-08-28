@@ -64,7 +64,23 @@ cmake --build build
 
 - `libbigint.a` — 静态库
 - examples 中的示例（`bigint_benchmark` / `bst` / `pi`，`-DBUILD_EXAMPLES=OFF` 可关闭）
-- `test_fft_digit_bits` — FFT 精度测试（`-DBUILD_TESTS=OFF` 可关闭）
+- `test_bigint` — 核心功能测试（随机对拍朴素参考 + 边界 + 已知值，约 4 万例）
+- `test_fft_digit_bits` — FFT 精度测试与乘法回归（`-DBUILD_TESTS=OFF` 可关闭）
+
+## 测试
+
+```bash
+# 一键运行全部测试（CTest）
+ctest --test-dir build --output-on-failure
+
+# 单独运行
+build/test_bigint                    # 核心功能：BigInt/BigFloat 随机对拍 + 边界 + 已知值
+build/test_fft_digit_bits regress    # 乘法回归：FFT 各 digit_bits vs NTT 参考
+build/test_fft_digit_bits measure    # 重测 FFT 精度表（输出可直接回填 mul.h）
+```
+
+- 核心测试使用**固定随机种子**（确定性可复现），覆盖：整数四则与符号、divmod 四种舍入、移位、位运算、字符串与 hex 往返、BigFloat（double 互转、加减对拍、`mul(precision)` 截断语义、round 全舍进位、reciprocal/inv）、进位/借位长链与 2 的幂边界、跨 FFT/NTT 分发的大数除法。
+- CI（GitHub Actions）：ubuntu（gcc/clang × Debug/Release）+ windows（msys2 gcc Release），构建零警告（Debug `-Werror`）并运行 `ctest`。
 
 ## 安装与集成
 
