@@ -105,7 +105,7 @@ BigInt::BigInt(const std::string& s, bool hex)
 
 auto BigInt::convert_from_dec_string(const std::string& s, std::size_t start, std::size_t end)
     -> std::pair<BigInt, std::size_t> {
-    if (end - start < std::max(2ull, DEC_STRING_BRUTE_THRESHOLDS[0])) {
+    if (end - start < std::max<std::size_t>(2, DEC_STRING_BRUTE_THRESHOLDS[0])) {
         BigInt      res(0);
         std::size_t len = 0;
         uint64_t    cur = 0, base = 1;
@@ -839,9 +839,9 @@ auto BigFloat::add_or_sub(const BigFloat& a, const BigFloat& b, bool is_sub) -> 
     if (tail_zero_b == len_b)
         return a;
 
-    int64_t point_pos_res = std::max(point_pos_a - tail_zero_a, point_pos_b - tail_zero_b);
+    auto point_pos_res = std::max<int64_t>(point_pos_a - tail_zero_a, point_pos_b - tail_zero_b);
 
-    int64_t len_res = std::max(len_a - point_pos_a, len_b - point_pos_b) + point_pos_res;
+    auto len_res = std::max<int64_t>(len_a - point_pos_a, len_b - point_pos_b) + point_pos_res;
 
     if (len_res < 0) {
         unreachable();
@@ -861,8 +861,8 @@ auto BigFloat::add_or_sub(const BigFloat& a, const BigFloat& b, bool is_sub) -> 
 
     // 对齐后的 b 段与 res 对应段（加减分支共用）
     const auto b_span = std::span<const uint64_t>(b.data_).subspan(tail_zero_b);
-    auto       c_span = std::span<uint64_t>(res.data_)
-                            .subspan(static_cast<std::size_t>(offset_b + tail_zero_b));
+    auto       c_span =
+        std::span<uint64_t>(res.data_).subspan(static_cast<std::size_t>(offset_b + tail_zero_b));
 
     if (a.is_neg_ ^ b.is_neg_ ^ is_sub) {  // 绝对值相减
 
@@ -928,7 +928,7 @@ void BigFloat::print(std::ostream& output, std::size_t dec_digits, bool direct) 
             int_part.data_.assign(-point_pos_, 0);
         }
         int_part.data_.insert(
-            int_part.data_.end(), data_.begin() + std::max(0ll, point_pos_), data_.end());
+            int_part.data_.end(), data_.begin() + std::max<int64_t>(0, point_pos_), data_.end());
     }
     if (int_part.data_.empty()) {
         int_part.data_.push_back(0);

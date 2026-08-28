@@ -34,10 +34,11 @@ public:
         static constexpr std::size_t THRESHOLD           = 1024;
         static constexpr std::size_t BLOCK_THREAD_FACTOR = 4;
 
-        void init(std::size_t total_threads) {
+        void init(uint32_t total_threads) {
             if (total == 0) {
-                total      = v.size() / 2 / ntt::NUM_PRIMES;
-                block_size = std::max(1ull, total / (total_threads * BLOCK_THREAD_FACTOR));
+                total = v.size() / 2 / ntt::NUM_PRIMES;
+                block_size =
+                    std::max<std::size_t>(1, total / (total_threads * BLOCK_THREAD_FACTOR));
             }
         }
 
@@ -85,10 +86,11 @@ public:
         static constexpr std::size_t THRESHOLD           = 2048;
         static constexpr std::size_t BLOCK_THREAD_FACTOR = 4;
 
-        void init(std::size_t total_threads) {
+        void init(uint32_t total_threads) {
             if (total == 0) {
-                total      = v.size() / ntt::NUM_PRIMES;
-                block_size = std::max(1ull, total / (total_threads * BLOCK_THREAD_FACTOR));
+                total = v.size() / ntt::NUM_PRIMES;
+                block_size =
+                    std::max<std::size_t>(1, total / (total_threads * BLOCK_THREAD_FACTOR));
             }
         }
 
@@ -115,10 +117,11 @@ public:
         static constexpr std::size_t THRESHOLD           = 2048;
         static constexpr std::size_t BLOCK_THREAD_FACTOR = 4;
 
-        void init(std::size_t total_threads) {
+        void init(uint32_t total_threads) {
             if (total == 0) {
-                total      = v1.size() / ntt::NUM_PRIMES;
-                block_size = std::max(1ull, total / (total_threads * BLOCK_THREAD_FACTOR));
+                total = v1.size() / ntt::NUM_PRIMES;
+                block_size =
+                    std::max<std::size_t>(1, total / (total_threads * BLOCK_THREAD_FACTOR));
             }
         }
 
@@ -144,10 +147,11 @@ public:
         static constexpr std::size_t THRESHOLD           = 1024;
         static constexpr std::size_t BLOCK_THREAD_FACTOR = 4;
 
-        void init(std::size_t total_threads) {
+        void init(uint32_t total_threads) {
             if (total == 0) {
-                total      = v.size() / ntt::NUM_PRIMES;
-                block_size = std::max(1ull, total / (total_threads * BLOCK_THREAD_FACTOR));
+                total = v.size() / ntt::NUM_PRIMES;
+                block_size =
+                    std::max<std::size_t>(1, total / (total_threads * BLOCK_THREAD_FACTOR));
             }
         }
 
@@ -397,7 +401,7 @@ void crt_merge(std::span<uint32_t> v) {
             v[i + 2] = x & ntt::NTT_DIGIT_MASK;
         }
     } else {
-        NTTThreadPool::CRTMergeTask task{{}, v};
+        NTTThreadPool::CRTMergeTask task({}, v);
         pool.run_task(&task);
     }
 }
@@ -474,10 +478,10 @@ auto mul(std::span<const uint64_t> A, std::span<const uint64_t> B) -> std::vecto
         }
     };
 
-    std::size_t           new_size =
-                              std::bit_ceil(detail::ceil_div<std::size_t>(A.size() * 64, NTT_DIGIT_BITS)
-                                            + detail::ceil_div<std::size_t>(B.size() * 64, NTT_DIGIT_BITS) - 1),
-                          new_size_ntt = new_size * 3;
+    std::size_t new_size = std::bit_ceil(
+                    detail::ceil_div<std::size_t>(A.size() * 64, NTT_DIGIT_BITS)
+                    + detail::ceil_div<std::size_t>(B.size() * 64, NTT_DIGIT_BITS) - 1),
+                new_size_ntt = new_size * 3;
     std::vector<uint32_t> vec_a;
     vec_a.reserve(new_size_ntt);
     vec64_to_vec32_and_repeat(A, vec_a, NTT_DIGIT_BITS, NUM_PRIMES);

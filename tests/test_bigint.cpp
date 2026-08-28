@@ -41,7 +41,7 @@ static auto ref_cmp(const LimbVec& a, const LimbVec& b) -> int {
     return 0;
 }
 static auto ref_add(const LimbVec& a, const LimbVec& b) -> LimbVec {
-    LimbVec     c(std::max(a.size(), b.size()), 0);
+    LimbVec     c(std::max<std::size_t>(a.size(), b.size()), 0);
     __uint128_t carry = 0;
     for (std::size_t i = 0; i < c.size(); ++i) {
         __uint128_t t = (i < a.size() ? (__uint128_t)a[i] : 0) + (i < b.size() ? b[i] : 0) + carry;
@@ -315,7 +315,7 @@ static void test_random_arithmetic() {
 
         // 位运算（忽略符号）
         LimbVec e_and, e_or, e_xor;
-        for (std::size_t i = 0; i < std::max(a.size(), b.size()); ++i) {
+        for (std::size_t i = 0; i < std::max<std::size_t>(a.size(), b.size()); ++i) {
             uint64_t x = i < a.size() ? a[i] : 0, y = i < b.size() ? b[i] : 0;
             e_and.push_back(x & y);
             e_or.push_back(x | y);

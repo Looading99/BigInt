@@ -243,7 +243,7 @@ static constexpr auto ssa_size(std::size_t m) -> std::size_t {
         return 0;
     }
     auto [N, K] = calc_slice(m);
-    return (ptrs_size(N) + slices_size(N)) * 2 + std::max(temp_size(N), ssa_size(N));
+    return (ptrs_size(N) + slices_size(N)) * 2 + std::max<std::size_t>(temp_size(N), ssa_size(N));
 }
 
 // 计算 C = A*B mod (2^m+1)，必须保证 A 和 B < 2^m+1 且 C.size() >= m/64 + 1 且 m 是 2 的幂
