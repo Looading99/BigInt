@@ -14,7 +14,7 @@ jobs:
         compiler: [g++, clang++]
         config: [Debug, Release]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install clang
         if: matrix.compiler == 'clang++'
         run: sudo apt-get update && sudo apt-get install -y clang
@@ -26,21 +26,54 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
   windows:
-    name: windows-msys2-gcc-Release
+    name: windows-msys2-g++-${{ matrix.config }}
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [Debug, Release]
     defaults:
       run:
         shell: msys2 {0}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: msys2/setup-msys2@v2
         with:
           msystem: UCRT64
           update: true
           install: mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja
       - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_COMPILER=g++
       - name: Build
         run: cmake --build build
       - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  windows-msvc-clang:
+    name: windows-msvc-clang-${{ matrix.config }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [Debug, Release]
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+      - name: Set up LLVM
+        shell: pwsh
+        run: |
+          # windows-latest 镜像自带 LLVM(choco)，以下仅作兜底
+          if (-not (Test-Path 'C:\Program Files\LLVM\bin\clang-cl.exe')) {
+            choco install llvm -y --no-progress
+            Add-Content $env:GITHUB_PATH 'C:\Program Files\LLVM\bin'
+          }
+      - name: Configure
+        shell: pwsh
+        run: cmake -S . -B build -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_LINKER=lld-link
+      - name: Build
+        shell: pwsh
+        run: cmake --build build
+      - name: Test
+        shell: pwsh
         run: ctest --test-dir build --output-on-failure

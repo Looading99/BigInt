@@ -45,12 +45,15 @@ target_compile_options(
     bigint
     PRIVATE
         -mavx -mavx2 -mfma
-        $<$<CONFIG:Debug>:-Wall -Wextra -Wpedantic -Werror
+        $<$<CONFIG:Debug>:-Wall -Wextra -Wpedantic
             -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wcast-align
             -Woverloaded-virtual -Wnull-dereference -Wformat=2 
             -Wmisleading-indentation>
-        $<$<CONFIG:Release>:-flto>
-        $<$<CONFIG:RelWithDebInfo>:-flto>
+        # -Werror 仅对 GNU 风格前端（g++/clang++）生效。clang-cl（MSVC 兼容模式）
+        # 默认开启的警告集与 clang++ 差异很大（-Wshorten-64-to-32、-Wsign-conversion、
+        # -Wc++98-compat*、-Wcomma、-Wunsafe-buffer-usage 等），-Werror 下无法编译，
+        # 暂不启用，待后续逐步修掉这些警告后再恢复。
+        $<$<AND:$<CONFIG:Debug>,$<NOT:$<CXX_COMPILER_FRONTEND_VARIANT:MSVC>>>:-Werror>
 )
 
 # ---- 示例/基准程序 ----
