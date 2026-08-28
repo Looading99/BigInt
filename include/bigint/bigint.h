@@ -3,6 +3,7 @@
 #include <compare>
 #include <concepts>
 #include <cstdint>
+#include <span>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -77,6 +78,29 @@ public:
             other.reset();
         }
         return *this;
+    }
+
+    // 从 64 位 limb 数组（小端，同 get_data 的表示）构造，is_neg 指定符号；
+    // 复制构造自 std::span。空输入与全 0 输入均得到 0（无符号）。
+    explicit BigInt(std::span<const uint64_t> limbs_to_copy, bool is_neg = false)
+        : data_(limbs_to_copy.begin(), limbs_to_copy.end())
+        , is_neg_(is_neg) {
+        if (data_.empty()) {
+            reset();
+        } else {
+            remove_leading_zero();
+        }
+    }
+
+    // 移动构造自内部容器 Digits（无拷贝）
+    explicit BigInt(Digits&& limbs_to_move, bool is_neg = false)
+        : data_(std::move(limbs_to_move))
+        , is_neg_(is_neg) {
+        if (data_.empty()) {
+            reset();
+        } else {
+            remove_leading_zero();
+        }
     }
 
     // 忽略一切非法字符，字符串开头到第一个合法字符之间有 '-' 则结果为负
@@ -442,6 +466,15 @@ public:
     // 委托给 BigInt 构造，不支持处理字符串中的小数点！
     explicit BigFloat(const std::string& s, bool hex = false, int64_t offset = 0)
         : BigFloat(BigInt(s, hex), offset) {}
+
+    // 委托给 BigInt 构造：64 位 limb 数组（小端）复制构造
+    explicit BigFloat(
+        std::span<const uint64_t> limbs_to_copy, bool is_neg = false, int64_t offset = 0)
+        : BigFloat(BigInt(limbs_to_copy, is_neg), offset) {}
+
+    // 委托给 BigInt 构造：移动构造自内部容器 Digits（无拷贝）
+    explicit BigFloat(Digits&& limbs_to_move, bool is_neg = false, int64_t offset = 0)
+        : BigFloat(BigInt(std::move(limbs_to_move), is_neg), offset) {}
 
     explicit BigFloat(double value);
 

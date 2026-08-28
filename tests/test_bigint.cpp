@@ -29,23 +29,27 @@ using LimbVec = Digits;
 // ---- 朴素参考实现（基数 2^64 小端，无前导 0） ----
 
 static void nz(LimbVec& v) {
-    while (v.size() > 1 && v.back() == 0) v.pop_back();
+    while (v.size() > 1 && v.back() == 0)
+        v.pop_back();
 }
 static auto ref_cmp(const LimbVec& a, const LimbVec& b) -> int {
-    if (a.size() != b.size()) return a.size() < b.size() ? -1 : 1;
+    if (a.size() != b.size())
+        return a.size() < b.size() ? -1 : 1;
     for (std::size_t i = a.size(); i-- > 0;)
-        if (a[i] != b[i]) return a[i] < b[i] ? -1 : 1;
+        if (a[i] != b[i])
+            return a[i] < b[i] ? -1 : 1;
     return 0;
 }
 static auto ref_add(const LimbVec& a, const LimbVec& b) -> LimbVec {
-    LimbVec c(std::max(a.size(), b.size()), 0);
+    LimbVec     c(std::max(a.size(), b.size()), 0);
     __uint128_t carry = 0;
     for (std::size_t i = 0; i < c.size(); ++i) {
         __uint128_t t = (i < a.size() ? (__uint128_t)a[i] : 0) + (i < b.size() ? b[i] : 0) + carry;
         c[i]          = (uint64_t)t;
         carry         = t >> 64;
     }
-    if (carry) c.push_back(1);
+    if (carry)
+        c.push_back(1);
     nz(c);
     return c;
 }
@@ -66,7 +70,8 @@ static auto ref_sub(const LimbVec& a, const LimbVec& b) -> LimbVec {
     return c;
 }
 static auto ref_mul(const LimbVec& a, const LimbVec& b) -> LimbVec {
-    if ((a.size() == 1 && a[0] == 0) || (b.size() == 1 && b[0] == 0)) return {0};
+    if ((a.size() == 1 && a[0] == 0) || (b.size() == 1 && b[0] == 0))
+        return {0};
     LimbVec c(a.size() + b.size(), 0);
     for (std::size_t i = 0; i < a.size(); ++i) {
         __uint128_t carry = 0;
@@ -98,7 +103,8 @@ static auto ref_shl(const LimbVec& v, std::size_t bits) -> LimbVec {
             carry       = x >> (64 - rem);
             x           = nx;
         }
-        if (carry) r.push_back(carry);
+        if (carry)
+            r.push_back(carry);
     }
     nz(r);
     return r;
@@ -124,20 +130,10 @@ static auto rand_limbs(std::size_t max_n) -> LimbVec {
         default: x = rng(); break;
         }
     }
-    if (v.size() > 1) v.back() = rng();  // 前导 0 概率极低，直接随机
+    while (v.size() > 1 && v.back() == 0)
+        v.back() = rng();
     nz(v);
     return v;
-}
-
-// v 值 = Σ v[i] * 2^(64i)，通过公开 API 拼装
-static auto to_bigint(const LimbVec& v, bool neg) -> BigInt {
-    BigInt res(0);
-    for (std::size_t i = v.size(); i-- > 0;) {
-        res <<= 64;
-        res |= BigInt(v[i]);
-    }
-    if (neg) res.flip_sign();
-    return res;
 }
 
 static auto to_limbs(const BigInt& x) -> LimbVec {
@@ -146,7 +142,8 @@ static auto to_limbs(const BigInt& x) -> LimbVec {
 
 static void print_limbs(const char* name, const LimbVec& v) {
     std::cout << name << "=[";
-    for (auto x : v) std::cout << x << ",";
+    for (auto x : v)
+        std::cout << x << ",";
     std::cout << "]";
 }
 
@@ -158,16 +155,12 @@ static void test_boundary_chains() {
         const LimbVec one  = {1};
         LimbVec       big  = LimbVec(k, UINT64_MAX);  // 2^(64k) - 1
         LimbVec       pow2 = LimbVec(k + 1, 0);
-        pow2[k] = 1;  // 2^(64k)
+        pow2[k]            = 1;  // 2^(64k)
         TEST_CHECK(ref_cmp(ref_add(big, one), pow2) == 0, "carry chain");
         TEST_CHECK(ref_cmp(ref_sub(pow2, one), big) == 0, "borrow chain");
         TEST_CHECK(ref_cmp(ref_sub(pow2, pow2), LimbVec{0}) == 0, "equal magnitude");
         // BigInt 层面对拍
-        BigInt b(big[0]);
-        for (std::size_t i = 1; i < big.size(); ++i) {
-            b <<= 64;
-            b |= BigInt(big[i]);
-        }
+        BigInt b(big);
         BigInt b2(b);
         ++b2;  // 进位链
         TEST_CHECK(to_limbs(b2) == pow2, "BigInt ++ carry chain");
@@ -185,7 +178,8 @@ static void test_boundary_chains() {
     // 符号翻转：a - b 跨零
     const LimbVec x = {5};
     const LimbVec y = {7};
-    BigInt X = to_bigint(x, false), Y = to_bigint(y, false);
+    BigInt        X = BigInt(x);
+    BigInt        Y = BigInt(y);
     TEST_CHECK((X - Y) == BigInt(-2), "5 - 7 == -2");
     TEST_CHECK((Y - X) == BigInt(2), "7 - 5 == 2");
     TEST_CHECK((-X - Y) == BigInt(-12), "-5 - 7 == -12");
@@ -198,12 +192,12 @@ static void test_boundary_chains() {
     TEST_CHECK((X + uint64_t(3)) == BigInt(8), "5 + 3 == 8");
     TEST_CHECK((X - uint64_t(5)).is_zero(), "5 - 5 == 0");
     TEST_CHECK((X - uint64_t(6)) == BigInt(-1), "5 - 6 == -1");
-    BigInt big2 = to_bigint(LimbVec{UINT64_MAX, UINT64_MAX}, false);  // 2^128 - 1
-    TEST_CHECK((big2 + uint64_t(1)) == to_bigint(LimbVec{0, 0, 1}, false), "2^128-1 + 1");
-    TEST_CHECK((big2 - uint64_t(UINT64_MAX)) == to_bigint(LimbVec{0, UINT64_MAX}, false),
-        "2^128-1 - (2^64-1)");
-    TEST_CHECK((big2 * uint64_t(3)) == to_bigint(LimbVec{UINT64_MAX - 2, UINT64_MAX, 2}, false),
-        "(2^128-1)*3");
+    BigInt big2 = BigInt(LimbVec{UINT64_MAX, UINT64_MAX});  // 2^128 - 1
+    TEST_CHECK((big2 + uint64_t(1)) == BigInt(LimbVec{0, 0, 1}), "2^128-1 + 1");
+    TEST_CHECK(
+        (big2 - uint64_t(UINT64_MAX)) == BigInt(LimbVec{0, UINT64_MAX}), "2^128-1 - (2^64-1)");
+    TEST_CHECK(
+        (big2 * uint64_t(3)) == BigInt(LimbVec{UINT64_MAX - 2, UINT64_MAX, 2}), "(2^128-1)*3");
 }
 
 static void test_random_arithmetic() {
@@ -211,14 +205,14 @@ static void test_random_arithmetic() {
     for (std::size_t iter = 0; iter < 3000; ++iter) {
         const LimbVec a = rand_limbs(3), b = rand_limbs(3);
         const bool    na = rng() & 1, nb = rng() & 1;
-        const BigInt  A = to_bigint(a, na), B = to_bigint(b, nb);
+        const BigInt  A = BigInt(a, na), B = BigInt(b, nb);
         const int     sa = na ? -1 : 1, sb = nb ? -1 : 1;
 
         // 期望：A+B、A-B（绝对值 + 符号）
         // A+B：na==nb → abs 和、符号 na；na!=nb → abs 差、符号 = |a|>=|b| ? na : nb
         // A-B = A + (-B)：na!=nb → abs 和、符号 na；na==nb → abs 差、符号 = |a|>=|b| ? na : !na
-        LimbVec   ab, a_b;
-        int       s_ab = 0, s_a_b = 0;
+        LimbVec    ab, a_b;
+        int        s_ab = 0, s_a_b = 0;
         const bool ge = ref_cmp(a, b) >= 0;
         if (na == nb) {
             ab   = ref_add(a, b);
@@ -242,8 +236,8 @@ static void test_random_arithmetic() {
             s_a_b = na ? -1 : 1;
         }
         BigInt sum = A + B, diff = A - B;
-        TEST_CHECK(ref_cmp(to_limbs(sum), ab) == 0
-                       && sum.sign() == (ref_cmp(ab, {0}) == 0 ? 0 : s_ab),
+        TEST_CHECK(
+            ref_cmp(to_limbs(sum), ab) == 0 && sum.sign() == (ref_cmp(ab, {0}) == 0 ? 0 : s_ab),
             "A+B random");
         TEST_CHECK(ref_cmp(to_limbs(diff), a_b) == 0
                        && diff.sign() == (ref_cmp(a_b, {0}) == 0 ? 0 : s_a_b),
@@ -257,7 +251,7 @@ static void test_random_arithmetic() {
             "A*B random");
 
         // 64 位整数混合
-        const uint64_t c = rng();
+        const uint64_t c  = rng();
         LimbVec        cc = {c};
         if (c != 0) {
             // A+c：A 正 → |a|+c；A 负 → |a|>=c ? -( |a|-c ) : +( c-|a| )
@@ -301,9 +295,10 @@ static void test_random_arithmetic() {
         }
 
         // 移位
-        const std::size_t sh = rng() % 200;
+        const std::size_t sh    = rng() % 200;
         LimbVec           e_shl = a;
-        for (std::size_t t = 0; t < sh; ++t) e_shl = ref_add(e_shl, e_shl);
+        for (std::size_t t = 0; t < sh; ++t)
+            e_shl = ref_add(e_shl, e_shl);
         TEST_CHECK(ref_cmp(to_limbs(A << sh), e_shl) == 0, "A<<sh random");
         LimbVec e_shr = a;
         for (std::size_t t = 0; t < sh; ++t) {
@@ -339,20 +334,22 @@ static void test_divmod() {
     std::cout << "[divmod]\n";
     for (std::size_t iter = 0; iter < 500; ++iter) {
         const LimbVec a = rand_limbs(3), b = rand_limbs(2);
-        if (ref_cmp(b, {0}) == 0) continue;
+        if (ref_cmp(b, {0}) == 0)
+            continue;
         const bool   na = rng() & 1, nb = rng() & 1;
-        const BigInt A = to_bigint(a, na), B = to_bigint(b, nb);
+        const BigInt A(a, na), B(b, nb);
         // 参考长除（二进制逐位，简单可靠）
-        LimbVec R = a, Q;
+        LimbVec R  = a, Q;
         int     sQ = na ^ nb ? -1 : 1;
         {
-            LimbVec   cur = {0};
-            LimbVec   q   = {0};
+            LimbVec           cur  = {0};
+            LimbVec           q    = {0};
             const std::size_t bits = a.size() * 64;
             for (std::size_t i = bits; i-- > 0;) {
-                cur = ref_add(cur, cur);
+                cur          = ref_add(cur, cur);
                 uint64_t bit = (a[i / 64] >> (i % 64)) & 1;
-                if (bit) cur = ref_add(cur, {1});
+                if (bit)
+                    cur = ref_add(cur, {1});
                 q = ref_add(q, q);
                 if (ref_cmp(cur, b) >= 0) {
                     cur = ref_sub(cur, b);
@@ -375,7 +372,7 @@ static void test_string_roundtrip() {
     for (std::size_t iter = 0; iter < 200; ++iter) {
         const LimbVec a  = rand_limbs(3);
         const bool    na = rng() & 1;
-        const BigInt  A  = to_bigint(a, na);
+        const BigInt  A(a, na);
         TEST_CHECK(BigInt(A.to_string()) == A, "dec roundtrip");
         TEST_CHECK(BigInt(A.to_string(true), true) == A, "hex roundtrip");
     }
@@ -385,14 +382,17 @@ static void test_known_values() {
     std::cout << "[known values]\n";
     BigInt p256(1);
     p256 <<= 256;
-    TEST_CHECK(p256.to_string()
-                   == "115792089237316195423570985008687907853269984665640564039457584007913129639936",
+    TEST_CHECK(
+        p256.to_string()
+            == "115792089237316195423570985008687907853269984665640564039457584007913129639936",
         "2^256");
-    TEST_CHECK((p256 - 1).to_string()
-                   == "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+    TEST_CHECK(
+        (p256 - 1).to_string()
+            == "115792089237316195423570985008687907853269984665640564039457584007913129639935",
         "2^256-1");
     BigInt fact(1);
-    for (int i = 2; i <= 30; ++i) fact *= BigInt(i);
+    for (int i = 2; i <= 30; ++i)
+        fact *= BigInt(i);
     TEST_CHECK(fact.to_string() == "265252859812191058636308480000000", "30!");
     BigInt p10(1);
     p10 *= BigInt(10000000000000000000ull);
@@ -417,8 +417,20 @@ static void test_known_values() {
 static void test_bigfloat() {
     std::cout << "[bigfloat]\n";
     // double 往返
-    const std::array vals{0.0, 1.0, -1.0, 0.5, 2.0, std::numbers::pi, 1e-300, 1e300,
-        5e-324, 2.2250738585072014e-308, 1.7976931348623157e308, 0.1, -0.1, 123456.789};
+    const std::array vals{0.0,
+        1.0,
+        -1.0,
+        0.5,
+        2.0,
+        std::numbers::pi,
+        1e-300,
+        1e300,
+        5e-324,
+        2.2250738585072014e-308,
+        1.7976931348623157e308,
+        0.1,
+        -0.1,
+        123456.789};
     for (double d : vals) {
         BigFloat f(d);
         TEST_CHECK(std::bit_cast<uint64_t>(f.to_double()) == std::bit_cast<uint64_t>(d),
@@ -427,17 +439,18 @@ static void test_bigfloat() {
     for (int i = 0; i < 200; ++i) {
         uint64_t bits = rng();
         auto     d    = std::bit_cast<double>(bits);
-        if (std::isnan(d) || std::isinf(d)) continue;  // BigFloat 构造对 inf/nan 抛异常
+        if (std::isnan(d) || std::isinf(d))
+            continue;  // BigFloat 构造对 inf/nan 抛异常
         BigFloat f(d);
         TEST_CHECK(std::bit_cast<uint64_t>(f.to_double()) == bits, "double roundtrip random");
     }
     // BigFloat 加减与 BigInt 对拍（点位置 0）
     for (int i = 0; i < 200; ++i) {
-        const LimbVec a  = rand_limbs(2), b = rand_limbs(2);
+        const LimbVec a = rand_limbs(2), b = rand_limbs(2);
         const bool    na = rng() & 1, nb = rng() & 1;
-        BigFloat fa(to_bigint(a, na)), fb(to_bigint(b, nb));
-        BigFloat fs = fa + fb;
-        BigInt   exp = to_bigint(a, na) + to_bigint(b, nb);
+        BigFloat      fa(a, na), fb(b, nb);
+        BigFloat      fs  = fa + fb;
+        BigInt        exp = BigInt(a, na) + BigInt(b, nb);
         if (!(BigInt(fs) == exp)) {
             ++bigint_test::fails();
             ++bigint_test::cases();
@@ -451,7 +464,7 @@ static void test_bigfloat() {
         }
         ++bigint_test::cases();
         BigFloat fd   = fa - fb;
-        BigInt   exp2 = to_bigint(a, na) - to_bigint(b, nb);
+        BigInt   exp2 = BigInt(a, na) - BigInt(b, nb);
         if (!(BigInt(fd) == exp2)) {
             ++bigint_test::fails();
             std::cout << "FAIL: BigFloat sub vs BigInt: ";
@@ -465,24 +478,28 @@ static void test_bigfloat() {
     // mul(precision) 截断语义：输入截到顶部 precision 个 limb（跳过窗口内低端 0）→
     // 乘积 → 结果截顶；point 补偿 = 总截断量（精确模拟 mul_digits 逻辑）
     for (int i = 0; i < 200; ++i) {
-        const LimbVec a = rand_limbs(2), b = rand_limbs(2);
-        BigFloat      fa(to_bigint(a, false)), fb(to_bigint(b, false));
+        const LimbVec     a = rand_limbs(2), b = rand_limbs(2);
+        BigFloat          fa(a), fb(b);
         const std::size_t precision = 1 + rng() % 4;
-        BigFloat fm = BigFloat::mul(fa, fb, precision);
-        LimbVec  ta(a), tb(b);
-        std::size_t off_a = ta.size() > precision ? ta.size() - precision : 0;
-        std::size_t off_b = tb.size() > precision ? tb.size() - precision : 0;
-        while (off_a < ta.size() && ta[off_a] == 0) ++off_a;
-        while (off_b < tb.size() && tb[off_b] == 0) ++off_b;
+        BigFloat          fm        = BigFloat::mul(fa, fb, precision);
+        LimbVec           ta(a), tb(b);
+        std::size_t       off_a = ta.size() > precision ? ta.size() - precision : 0;
+        std::size_t       off_b = tb.size() > precision ? tb.size() - precision : 0;
+        while (off_a < ta.size() && ta[off_a] == 0)
+            ++off_a;
+        while (off_b < tb.size() && tb[off_b] == 0)
+            ++off_b;
         ta.erase(ta.begin(), ta.begin() + static_cast<int64_t>(off_a));
         tb.erase(tb.begin(), tb.begin() + static_cast<int64_t>(off_b));
         LimbVec c{0};
         if (!ta.empty() && !tb.empty()) {
-            c = ref_mul(ta, tb);
+            c                 = ref_mul(ta, tb);
             std::size_t off_r = c.size() > precision ? c.size() - precision : 0;
-            while (off_r < c.size() && c[off_r] == 0) ++off_r;
+            while (off_r < c.size() && c[off_r] == 0)
+                ++off_r;
             c.erase(c.begin(), c.begin() + static_cast<int64_t>(off_r));
-            if (c.empty()) c.push_back(0);
+            if (c.empty())
+                c.push_back(0);
             c = ref_shl(c, 64 * (off_a + off_b + off_r));
         }
         TEST_CHECK(to_limbs(BigInt(fm)) == c, "BigFloat mul precision");
@@ -490,12 +507,13 @@ static void test_bigfloat() {
     // reciprocal：x * reciprocal(x) ≈ 1（带舍入）；inv 别名等价
     for (int i = 0; i < 50; ++i) {
         const LimbVec a = rand_limbs(2);
-        if (ref_cmp(a, {0}) == 0) continue;
-        BigFloat        f(to_bigint(a, false));
+        if (ref_cmp(a, {0}) == 0)
+            continue;
+        BigFloat          f(a);
         const std::size_t prec = 2 + rng() % 6;
-        BigFloat        inv  = f.reciprocal(prec);
-        BigFloat        prod = BigFloat::mul(f, inv, prec + 4);
-        BigFloat        err  = prod - BigFloat(1);
+        BigFloat          inv  = f.reciprocal(prec);
+        BigFloat          prod = BigFloat::mul(f, inv, prec + 4);
+        BigFloat          err  = prod - BigFloat(1);
         // 误差应远小于 1 个 limb 的相对量级（乘积精度 prec+4 个 limb）
         TEST_CHECK(BigInt(err).len() <= 1, "reciprocal x*1/x ~= 1");
         // inv 别名与 reciprocal 等价（同路径计算，差必为 0）
@@ -541,6 +559,51 @@ static void test_bigfloat() {
     }
 }
 
+static void test_limb_constructors() {
+    std::cout << "[limb constructors]\n";
+    // span 复制构造与 Digits 移动构造互相对拍
+    for (int i = 0; i < 200; ++i) {
+        const LimbVec v   = rand_limbs(3);
+        const bool    neg = rng() & 1;
+        BigInt        a(v, neg);
+        Digits        d(v);
+        BigInt        b(std::move(d), neg);
+        TEST_CHECK(a == b, "span ctor == move ctor");
+        // 前导 0 应在构造时被移除
+        Digits d2(v);
+        d2.push_back(0);
+        BigInt c(d2, neg);
+        TEST_CHECK(c == a, "leading zero trimmed");
+    }
+    // 边界：空输入、全 0 输入
+    TEST_CHECK(BigInt(std::span<const uint64_t>(), false).is_zero(), "empty span -> 0");
+    TEST_CHECK(BigInt(std::span<const uint64_t>(), true).is_zero(), "empty span neg -> 0");
+    TEST_CHECK(BigInt(LimbVec{0, 0}, true).is_zero() && BigInt(LimbVec{0, 0}, true).sign() == 0,
+        "all-zero limbs -> 0");
+    Digits z{0, 0};
+    BigInt zz(std::move(z), true);
+    TEST_CHECK(zz.is_zero() && zz.sign() == 0, "all-zero digits move -> 0");
+    // 单 limb 已知值
+    TEST_CHECK(
+        BigInt(LimbVec{UINT64_MAX}, false) == BigInt("18446744073709551615"), "limb UINT64_MAX");
+    TEST_CHECK(BigInt(LimbVec{1, 1}, true) == -(BigInt("18446744073709551617")), "two limbs neg");
+
+    // BigFloat 委托构造（span/Digits + 符号 + offset，offset 单位：位）
+    {
+        BigFloat f1(std::span<const uint64_t>(LimbVec{1}), false, 64);  // 2^64
+        TEST_CHECK(BigInt(f1) == (BigInt(1) << 64), "BigFloat span ctor offset");
+        BigFloat f2(std::span<const uint64_t>(LimbVec{1, 1}), true, 0);  // -(2^64+1)
+        TEST_CHECK(BigInt(f2) == -(BigInt("18446744073709551617")), "BigFloat span ctor neg");
+        Digits   d3{5};
+        BigFloat f3(std::move(d3), true, 0);
+        TEST_CHECK(BigInt(f3) == BigInt(-5), "BigFloat move ctor");
+        BigFloat f4(LimbVec{0, 0}, false, 0);
+        TEST_CHECK(f4.is_zero(), "BigFloat all-zero limbs -> 0");
+        BigFloat f5(LimbVec{1}, false, -1);  // 0.5
+        TEST_CHECK(f5.to_double() == 0.5, "BigFloat span ctor negative offset");
+    }
+}
+
 static void test_big_numbers() {
     std::cout << "[big numbers]\n";
     // 跨 FFT/NTT 分发的大数除法与 get_pow_of_ten
@@ -562,6 +625,7 @@ auto main() -> int {
     test_divmod();
     test_string_roundtrip();
     test_known_values();
+    test_limb_constructors();
     test_bigfloat();
     test_big_numbers();
     return bigint_test::summary("test_bigint");

@@ -171,7 +171,7 @@ int main() {
 
 | 类别 | API |
 | --- | --- |
-| 构造 | 任意无/有符号整型<sup>[1]</sup>、`std::string`（`hex=false` 十进制 / `true` 十六进制）、`BigFloat`（移动/拷贝；可指定舍入模式）<sup>[2]</sup> |
+| 构造 | 任意无/有符号整型<sup>[1]</sup>、`std::string`（`hex=false` 十进制 / `true` 十六进制）、64 位 limb 数组（`std::span<const uint64_t>` 复制 / `Digits&&` 移动，可指定符号）、`BigFloat`（移动/拷贝；可指定舍入模式）<sup>[2]</sup> |
 | 查询 | `len()`、`get_data()`、`is_zero()`、`sign()` |
 | 转换 | `to_string(hex=false)`、`print(ostream, hex=false, direct=false)` |
 | 算数运算 | `+ - * / += -= *= /=`<sup>[3]</sup>、`++ --`<sup>[4]</sup>、一元 `+ -`、`unsigned_inplace_divmod(uint64_t)`、`divmod(BigInt, RoundMode)` |
@@ -190,7 +190,7 @@ int main() {
 
 ### `bigint::BigFloat` — 高精度小数
 
-- 构造：`BigInt`（移动/拷贝）、整型、字符串（可带 `offset`）、`double`（除拷贝/移动外均为 `explicit`）
+- 构造：`BigInt`（移动/拷贝）、整型、字符串（可带 `offset`）、64 位 limb 数组（`std::span<const uint64_t>` 复制 / `Digits&&` 移动，可带符号与 `offset`）、`double`（除拷贝/移动外均为 `explicit`）
 - 方法：`sign()`、`to_double()`、`to_string(dec_digits)`、`print(ostream, dec_digits, direct)`、`reciprocal(precision)`（别名 `inv(precision)`）、`round(mode, precision, relative)`、`get_data()`、`get_point_pos()`等
 - 运算：`+ -`、乘法`*`和`mul(a, b, precision)`（`*`无精度限制，`mul`需传入目标精度，精度单位为 64 位 limb）、`<< >> <<= >>=`（二进制移位，等价于乘/除以 2 的幂，可传入负数）、一元 `+ -`
 - 舍入模式 `RoundMode`：`Truncate` / `Floor` / `Ceil` / `RoundHalfUp`（别名 `Round`）
