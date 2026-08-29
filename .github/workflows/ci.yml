@@ -50,7 +50,7 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
   windows-msvc-clang:
-    name: windows-msvc-clang-${{ matrix.config }}
+    name: windows-msvc-clang++-${{ matrix.config }}
     runs-on: windows-latest
     strategy:
       fail-fast: false
@@ -64,13 +64,13 @@ jobs:
         shell: pwsh
         run: |
           # windows-latest 镜像自带 LLVM(choco)，以下仅作兜底
-          if (-not (Test-Path 'C:\Program Files\LLVM\bin\clang-cl.exe')) {
+          if (-not (Test-Path 'C:\Program Files\LLVM\bin\clang++.exe')) {
             choco install llvm -y --no-progress
             Add-Content $env:GITHUB_PATH 'C:\Program Files\LLVM\bin'
           }
       - name: Configure
         shell: pwsh
-        run: cmake -S . -B build -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_LINKER=lld-link
+        run: cmake -S . -B build -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_COMPILER=clang++
       - name: Build
         shell: pwsh
         run: cmake --build build

@@ -53,10 +53,10 @@ public:
     static std::array<std::size_t, 2>           DEC_STRING_BRUTE_THRESHOLDS;
     static constexpr std::array<std::size_t, 2> DEC_STRING_BRUTE_THRESHOLDS_DEFAULT = {5000, 2000};
 
-    explicit constexpr BigInt(UnsignedIntegral auto x)
+    explicit BigInt(UnsignedIntegral auto x)
         : BigInt(x, false) {}
 
-    explicit constexpr BigInt(SignedIntegral auto x)
+    explicit BigInt(SignedIntegral auto x)
         : BigInt(to_unsigned_abs(x), x < 0) {}
 
     // 拷贝
@@ -66,12 +66,12 @@ public:
 
     // 移动：移动后源对象被重置为 0，保持 "data_ 非空" 的不变量，
     // 因此移动后对源对象调用任何公开 API 都安全（而非未指定状态）。
-    constexpr BigInt(BigInt&& other) noexcept
+    BigInt(BigInt&& other) noexcept
         : data_(std::move(other.data_))
         , is_neg_(other.is_neg_) {
         other.reset();
     }
-    constexpr auto operator=(BigInt&& other) noexcept -> BigInt& {
+    auto operator=(BigInt&& other) noexcept -> BigInt& {
         if (this != &other) {
             data_   = std::move(other.data_);
             is_neg_ = other.is_neg_;
@@ -110,20 +110,18 @@ public:
 
     explicit BigInt(BigFloat&& x, RoundMode mode = RoundMode::Truncate);
 
-    [[nodiscard]] constexpr auto len() const noexcept -> std::size_t { return data_.size(); }
+    [[nodiscard]] auto len() const noexcept -> std::size_t { return data_.size(); }
 
-    [[nodiscard]] constexpr auto get_data() const noexcept -> const Digits& { return data_; }
+    [[nodiscard]] auto get_data() const noexcept -> const Digits& { return data_; }
 
-    [[nodiscard]] constexpr auto is_zero() const noexcept -> bool {
+    [[nodiscard]] auto is_zero() const noexcept -> bool {
         if (data_.size() == 0 || (data_.size() > 1 && data_.back() == 0)) {
             unreachable();
         }
         return data_.size() == 1 && data_[0] == 0;
     }
 
-    [[nodiscard]] constexpr auto sign() const noexcept -> int {
-        return is_zero() ? 0 : (is_neg_ ? -1 : 1);
-    }
+    [[nodiscard]] auto sign() const noexcept -> int { return is_zero() ? 0 : (is_neg_ ? -1 : 1); }
 
     [[nodiscard]] auto to_string(bool hex = false) const -> std::string {
         std::ostringstream res;
@@ -137,26 +135,26 @@ public:
     void print(std::ostream& output, bool hex = false, bool direct = false) const;
 
     // 仅可能因内存分配抛 bad_alloc；noexcept 下内存耗尽将 terminate（视为不可恢复）。
-    constexpr void reset() noexcept {
+    void reset() noexcept {
         data_.resize(1);
         data_[0] = 0;
         is_neg_  = false;
     }
 
-    constexpr void flip_sign() noexcept {
+    void flip_sign() noexcept {
         if (!is_zero())
             is_neg_ = !is_neg_;
     }
 
-    constexpr void remove_sign() noexcept { is_neg_ = false; }
+    void remove_sign() noexcept { is_neg_ = false; }
 
     static auto compare_abs(const BigInt& a, const BigInt& b) noexcept -> std::strong_ordering;
 
     auto unsigned_inplace_divmod(uint64_t b) -> uint64_t;
 
-    constexpr auto operator+() const -> BigInt { return *this; }
+    auto operator+() const -> BigInt { return *this; }
 
-    constexpr auto operator-() const -> BigInt {
+    auto operator-() const -> BigInt {
         BigInt res(*this);
         res.flip_sign();
         return res;
@@ -246,7 +244,7 @@ public:
     auto bitwise_not(std::size_t len = 0) -> BigInt&;
 
     // 当且仅当自身为 0 时为 false。
-    explicit constexpr operator bool() const noexcept { return !is_zero(); }
+    explicit operator bool() const noexcept { return !is_zero(); }
 
     // 针对编译期 0 的快速比较。
     friend auto operator<=>(const BigInt& a, Literal_zero) noexcept -> std::strong_ordering {
@@ -384,10 +382,10 @@ private:
 
     bool is_neg_;
 
-    explicit constexpr BigInt()
+    explicit BigInt()
         : is_neg_(false) {}
 
-    explicit constexpr BigInt(UnsignedIntegral auto value, bool is_neg)
+    explicit BigInt(UnsignedIntegral auto value, bool is_neg)
         : is_neg_(is_neg) {
         if (value == 0) {
             data_.push_back(0);
@@ -485,13 +483,13 @@ public:
 
     // 移动：移动后源对象被重置为 0，保持 "data_ 非空" 的不变量，
     // 因此移动后对源对象调用任何公开 API 都安全（而非未指定状态）。
-    constexpr BigFloat(BigFloat&& other) noexcept
+    BigFloat(BigFloat&& other) noexcept
         : data_(std::move(other.data_))
         , point_pos_(other.point_pos_)
         , is_neg_(other.is_neg_) {
         other.reset();
     }
-    constexpr auto operator=(BigFloat&& other) noexcept -> BigFloat& {
+    auto operator=(BigFloat&& other) noexcept -> BigFloat& {
         if (this != &other) {
             data_      = std::move(other.data_);
             point_pos_ = other.point_pos_;
@@ -501,39 +499,37 @@ public:
         return *this;
     }
 
-    [[nodiscard]] constexpr auto len() const noexcept -> std::size_t { return data_.size(); }
+    [[nodiscard]] auto len() const noexcept -> std::size_t { return data_.size(); }
 
-    [[nodiscard]] constexpr auto get_point_pos() const noexcept -> int64_t { return point_pos_; }
+    [[nodiscard]] auto get_point_pos() const noexcept -> int64_t { return point_pos_; }
 
-    [[nodiscard]] constexpr auto get_data() const noexcept -> const Digits& { return data_; }
+    [[nodiscard]] auto get_data() const noexcept -> const Digits& { return data_; }
 
-    [[nodiscard]] constexpr auto is_zero() const noexcept -> bool {
+    [[nodiscard]] auto is_zero() const noexcept -> bool {
         if (data_.size() == 0 || (data_.size() > 1 && data_.back() == 0)) {
             unreachable();
         }
         return data_.size() == 1 && data_[0] == 0;
     }
 
-    [[nodiscard]] constexpr auto sign() const noexcept -> int {
-        return is_zero() ? 0 : (is_neg_ ? -1 : 1);
-    }
+    [[nodiscard]] auto sign() const noexcept -> int { return is_zero() ? 0 : (is_neg_ ? -1 : 1); }
 
     [[nodiscard]] auto to_double() const -> double;
 
     // 仅可能因内存分配抛 bad_alloc；noexcept 下内存耗尽将 terminate（视为不可恢复）。
-    constexpr void reset() noexcept {
+    void reset() noexcept {
         data_.resize(1);
         data_[0]   = 0;
         point_pos_ = 0;
         is_neg_    = false;
     }
 
-    constexpr void flip_sign() noexcept {
+    void flip_sign() noexcept {
         if (!is_zero())
             is_neg_ = !is_neg_;
     }
 
-    constexpr void remove_sign() noexcept { is_neg_ = false; }
+    void remove_sign() noexcept { is_neg_ = false; }
 
     // 输出人类可读的十进制小数，
     // 小数位数不传或传 0 使用二进制小数位数 * log10(2) ，想只输出整数请使用 round 。
@@ -569,9 +565,9 @@ public:
         return reciprocal(precision);
     }
 
-    [[nodiscard]] constexpr auto operator+() const -> BigFloat { return *this; }
+    [[nodiscard]] auto operator+() const -> BigFloat { return *this; }
 
-    [[nodiscard]] constexpr auto operator-() const -> BigFloat {
+    [[nodiscard]] auto operator-() const -> BigFloat {
         BigFloat res(*this);
         res.flip_sign();
         return res;
@@ -675,7 +671,7 @@ private:
     int64_t point_pos_;
     bool    is_neg_;
 
-    explicit constexpr BigFloat()
+    explicit BigFloat()
         : point_pos_(0)
         , is_neg_(false) {}
 

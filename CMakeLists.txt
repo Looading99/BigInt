@@ -45,15 +45,10 @@ target_compile_options(
     bigint
     PRIVATE
         -mavx -mavx2 -mfma
-        $<$<CONFIG:Debug>:-Wall -Wextra -Wpedantic
+        $<$<CONFIG:Debug>:-Wall -Wextra -Wpedantic -Werror
             -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wcast-align
             -Woverloaded-virtual -Wnull-dereference -Wformat=2 
             -Wmisleading-indentation>
-        # -Werror 仅对 GNU 风格前端（g++/clang++）生效。clang-cl（MSVC 兼容模式）
-        # 默认开启的警告集与 clang++ 差异很大（-Wshorten-64-to-32、-Wsign-conversion、
-        # -Wc++98-compat*、-Wcomma、-Wunsafe-buffer-usage 等），-Werror 下无法编译，
-        # 暂不启用，待后续逐步修掉这些警告后再恢复。
-        $<$<AND:$<CONFIG:Debug>,$<NOT:$<CXX_COMPILER_FRONTEND_VARIANT:MSVC>>>:-Werror>
 )
 
 # ---- 示例/基准程序 ----
@@ -67,11 +62,26 @@ if(BUILD_EXAMPLES)
 endif()
 
 # ---- 测试程序 ----
+# 每个功能域一个独立测试程序（tests/test_<domain>.cpp），ctest 按名注册。
 if(BUILD_TESTS)
     enable_testing()
-    add_executable(test_bigint tests/test_bigint.cpp)
-    target_link_libraries(test_bigint PRIVATE bigint::bigint)
-    add_test(NAME bigint_core COMMAND $<TARGET_FILE:test_bigint>)
+    set(BIGINT_TEST_SOURCES
+        tests/test_constructors.cpp
+        tests/test_arithmetic.cpp
+        tests/test_divmod.cpp
+        tests/test_shift_bitwise.cpp
+        tests/test_compare.cpp
+        tests/test_object.cpp
+        tests/test_string.cpp
+        tests/test_large.cpp
+        tests/test_bigfloat.cpp
+    )
+    foreach(BIGINT_TEST_SRC ${BIGINT_TEST_SOURCES})
+        get_filename_component(BIGINT_TEST_NAME ${BIGINT_TEST_SRC} NAME_WE)
+        add_executable(${BIGINT_TEST_NAME} ${BIGINT_TEST_SRC})
+        target_link_libraries(${BIGINT_TEST_NAME} PRIVATE bigint::bigint)
+        add_test(NAME ${BIGINT_TEST_NAME} COMMAND $<TARGET_FILE:${BIGINT_TEST_NAME}>)
+    endforeach()
 
     add_executable(test_fft_digit_bits tests/measure_digit_bits.cpp)
     target_link_libraries(test_fft_digit_bits PRIVATE bigint::bigint)

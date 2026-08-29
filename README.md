@@ -2,6 +2,21 @@
 
 基于 **FFT / 多模数 NTT / SSA 多算法自动分发** 的高性能高精度整数 / 高精度小数 C++20 库，使用多线程 NTT 与 AVX2+FMA 向量化加速。
 
+## 目录
+
+- [特性](#特性)
+- [目录结构](#目录结构)
+- [构建](#构建)
+- [测试](#测试)
+- [安装与集成](#安装与集成)
+  - [方式一：find_package](#方式一find_package)
+  - [方式二：add_subdirectory](#方式二add_subdirectory)
+  - [方式三：直接包含头文件](#方式三直接包含头文件)
+- [使用示例](#使用示例)
+- [API 概览](#api-概览)
+- [实现说明](#实现说明)
+- [已知限制](#已知限制)
+
 ## 特性
 
 - **高精度整数 `BigInt`**：支持任意位长的整数四则运算、位运算、比较、字符串互转、快速幂、`get_pow_of_ten`、`divmod` 及多种舍入模式。
@@ -26,6 +41,8 @@ src/
         ntt_multithread.cpp  # 多线程 NTT 乘法
         ssa.cpp              # SSA 乘法
 tests/
+    test_common.h            # 公共测试工具（固定种子随机源 + 基数 2^64 朴素参考实现）
+    test_*.cpp               # 按功能域拆分的 9 个测试程序（见“测试”章节）
     measure_digit_bits.cpp   # FFT digit_bits 精度测量与随机回归（目标 test_fft_digit_bits）
 examples/
     benchmark.cpp        # 基准测试示例程序（目标 bigint_benchmark）
@@ -43,7 +60,7 @@ cmake/
 - CMake ≥ 3.15
 - 支持 C++20 的编译器：GCC ≥ 10 或 Clang ≥ 12
 - 需要 `__uint128_t`/`__int128_t` 与 AVX2 + FMA（`-mavx2 -mfma`）支持
-- ⚠️ **MSVC 编译器不支持**（缺 `__uint128_t`）；**clang 的 Windows MSVC target**（如 LLVM 官方二进制）已支持——CMake 会自动链接 compiler-rt builtins 提供 128 位除法/取模运行时函数
+- ⚠️ **MSVC 编译器不支持**（缺 `__uint128_t`）；**clang 的 Windows MSVC target**（如 LLVM 官方二进制）已支持——CMake 会自动链接 compiler-rt builtins 提供 128 位除法/取模运行时函数（CI 中以 clang++ GNU 驱动 + MSVC target 验证，Debug 严格警告 `-Werror` 全绿）
 - CMake 生成器无强制要求，可按平台选用，如：
 
 ```bash
@@ -64,23 +81,35 @@ cmake --build build
 
 - `libbigint.a` — 静态库
 - examples 中的示例（`bigint_benchmark` / `bst` / `pi`，`-DBUILD_EXAMPLES=OFF` 可关闭）
-- `test_bigint` — 核心功能测试（随机对拍朴素参考 + 边界 + 已知值，约 4 万例）
-- `test_fft_digit_bits` — FFT 精度测试与乘法回归（`-DBUILD_TESTS=OFF` 可关闭）
+- 9 个按功能域拆分的测试程序（`test_constructors` / `test_arithmetic` / `test_divmod` / `test_shift_bitwise` / `test_compare` / `test_object` / `test_string` / `test_large` / `test_bigfloat`，`-DBUILD_TESTS=OFF` 可关闭）
+- `test_fft_digit_bits` — FFT 精度测试与乘法回归（随 BUILD_TESTS 开关）
 
 ## 测试
 
 ```bash
-# 一键运行全部测试（CTest）
+# 一键运行全部测试（CTest，每个功能域一个测试目标）
 ctest --test-dir build --output-on-failure
 
 # 单独运行
-build/test_bigint                    # 核心功能：BigInt/BigFloat 随机对拍 + 边界 + 已知值
+build/test_constructors     # 构造：整型（含 128 位）/ limb 数组 / 字符串 / 流输入
+build/test_arithmetic       # 加减乘 / 自增自减 / 64 位混合 / 进位借位长链
+build/test_divmod           # divmod 四种舍入模式 / 除零 / 单 limb 除法
+build/test_shift_bitwise    # 移位（含负偏移）/ 位运算 / bitwise_not
+build/test_compare          # <=> 全序 / 与 0 的快速比较 / compare_abs
+build/test_object           # 拷贝 / 移动语义 / reset / 符号操作
+build/test_string           # dec/hex 输出 / print / 流 / 分治解析
+build/test_large            # 大数：乘法分发全深度 / 大数除法 / get_pow_of_ten
+build/test_bigfloat         # BigFloat：double 往返 / 加减乘对拍 / round / reciprocal / 输出
 build/test_fft_digit_bits regress    # 乘法回归：FFT 各 digit_bits vs NTT 参考
 build/test_fft_digit_bits measure    # 重测 FFT 精度表（输出可直接回填 mul.h）
 ```
 
-- 核心测试使用**固定随机种子**（确定性可复现），覆盖：整数四则与符号、divmod 四种舍入、移位、位运算、字符串与 hex 往返、BigFloat（double 互转、加减对拍、`mul(precision)` 截断语义、round 全舍进位、reciprocal/inv）、进位/借位长链与 2 的幂边界、跨 FFT/NTT 分发的大数除法。
-- CI（GitHub Actions）：ubuntu（gcc/clang × Debug/Release）+ windows（msys2 gcc Release），构建零警告（Debug `-Werror`）并运行 `ctest`。
+- 测试按功能域拆分，共享 `tests/test_common.h`（固定种子随机源 + 基数 2^64 朴素参考实现，确定性可复现）。验证策略：
+  1. 中小规模与独立参考**随机对拍**：加减乘、divmod 四种舍入、BigFloat 加减乘的 limb 级比对、字符串/hex 解析与输出；
+  2. 大数用数学可推导的**结构模式验证**（如 `(2^64k-1)²` 的 limb 布局），覆盖 brute → FFT 全深度直至 FFT 容量上限（~84M bit），免 O(n²) 参考；
+  3. 大十进制串的**分治/暴力解析路径交叉验证**（`DEC_STRING_BRUTE_THRESHOLDS` 三配置一致性）。
+- 可选 NTT 路径回归（规模超出 FFT 上限，耗时较长，默认跳过）：`BIGINT_TEST_NTT=1 build/test_large`。
+- CI（GitHub Actions）：ubuntu（gcc / clang++ × Debug/Release）+ windows msys2（g++ × Debug/Release）+ windows-msvc-clang（clang++ + MSVC STL × Debug/Release），Debug 构建零警告（`-Werror`）并运行 `ctest`。
 
 ## 安装与集成
 
